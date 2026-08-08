@@ -1,14 +1,31 @@
 [package]
-name = "simdet"
+name = "simdispatch"
 version = "0.0.0"
 edition = "2024"
 rust-version = "1.89"
 description = "Runtime SIMD backend detection and downgrade-only selection, shared across SIMD-accelerated crates"
 license = "MIT"
-repository = "https://github.com/nanithefkuc/simdet"
-homepage = "https://github.com/nanithefkuc/simdet"
+repository = "https://github.com/nanithefkuc/simdispatch"
+homepage = "https://github.com/nanithefkuc/simdispatch"
 readme = "README.md"
 keywords = ["simd", "cpu-features", "dispatch", "detection", "runtime"]
 categories = ["hardware-support", "no-std", "algorithms"]
 
+[features]
+default = ["std"]
+# Runtime detection (archmage `summon()`) + the `SIMD_BACKEND` environment
+# override + the process-wide `backend()`. Without `std`, resolution reports
+# `Backend::Scalar` unconditionally.
+std = []
+# Unstable internals for benchmarking and downstream experimentation
+# (`selection::internals`). Nothing behind it is a compatibility promise.
+internals = []
+
 [dependencies]
+# Temporary pin until imazen/archmage#66 merges upstream. That PR adds
+# X64V3GfniCryptoToken — AVX2 + GFNI without AVX-512 — the token this crate's
+# degrade ladder sits on. Pinned to the tip of the author's fork branch;
+# once merged, re-pin to https://github.com/imazen/archmage at the merge
+# commit. Every crate below simdispatch consumes this pin, so swap it here
+# first, in the same sitting as the dependent updates.
+archmage = { git = "https://github.com/nanithefkuc/archmage", rev = "de519319b5670d93f71dada4c49cdfd83c0fc0ec" }
