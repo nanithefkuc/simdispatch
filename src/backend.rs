@@ -54,7 +54,7 @@ pub enum Backend {
 impl Backend {
     /// Every backend in detection-preference order — the shipped ladder. A
     /// `&'static` slice (not an array) so adding a tier is not a breaking
-    /// change to the type, per the `fff/.plans` decision.
+    /// change to the type.
     pub const ALL: &'static [Backend] = &[
         Backend::V3GfniCrypto,
         Backend::V3,

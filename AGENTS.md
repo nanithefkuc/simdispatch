@@ -38,7 +38,7 @@ archmage adoption); this crate never touches kernel bodies.
    root. This crate composes proofs, it does not compute bytes.
 5. **One runtime dependency: `archmage`, pinned by rev until
    `imazen/archmage#66` merges.** Bootstrapping on a fork rev is temporary;
-   the re-pin procedure lives in `05-conventions.md` of `.plans/`. No other
+   re-pin to the upstream merge commit once that pull request lands. No other
    runtime dependency may be added without the umbrella exception process.
 6. **`internals` is unstable by contract.** The `internals` feature exposes
    `pub(crate)` items for benchmarking and downstream experiments; nothing
@@ -55,7 +55,7 @@ archmage adoption); this crate never touches kernel bodies.
 - Do **not** name a backend by its historical `fff`/`cafft` semantic label
   (`Gfni`, `Avx2`, `Ssse3`, `Pmull`) in new code. Variants are named after the
   `archmage` tier they prove, so the ladder cannot drift from the source of
-  truth. Migration tables live in `.plans/02-ladder-design.md`.
+  truth.
 
 ## Cross-crate invariants
 
@@ -95,7 +95,4 @@ SIMD_BACKEND=scalar cargo test --all-features
 ```
 
 Edition 2024, MSRV 1.89. The crate is `#![no_std]`; `std` enters internally
-only for `archmage`'s runtime detection (default features). See
-`.plans/05-conventions.md` for the full command matrix and the `archmage` rev
-bump procedure. See `AGENTS.md` at the umbrella root for the cross-crate
-rules this crate implements.
+only for `archmage`'s runtime detection (default features).

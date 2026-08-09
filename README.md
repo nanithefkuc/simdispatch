@@ -5,82 +5,120 @@ your own agent before using.
 
 # simdispatch — SIMD backend selection
 
-Level 0 crate: the single source for SIMD capability selection in the FEC
-stack. Everything else that ships vector kernels — `fff`, `cafft`, and every
-future consumer — gets its backend from here.
+`simdispatch` is the single source of SIMD capability selection shared across
+SIMD-accelerated crates. It resolves which vector backend the current host can
+run, once per process, and exposes that choice to every consumer that ships
+vector kernels. It contains no kernels, no intrinsics, and no `unsafe`.
 
 Capability proof comes from [`archmage`](https://github.com/imazen/archmage)
-capability tokens: a tier is "on the host" exactly when its token
-`summon()`s. There is one probe in the whole stack, and it lives here. No
-kernels, no intrinsics, no `unsafe`.
+capability tokens: a tier is "on the host" exactly when its token `summon()`s.
+There is one probe in the whole stack, and it lives here.
 
-## What you get
-
-- **`Backend`** — the ladder. Variants are named after the `archmage` tier
-  they prove (`V3GfniCrypto`, `V3`, `V2`, `V1`, `NeonAes`, `Neon`, `Wasm128`,
-  `Scalar`) and declared in that tier's dispatch-priority order (strongest
-  first), so the order carries capability and cannot drift from `archmage`'s
-  source of truth. `Backend::ALL`, `name`/`from_name`/`Display`/`FromStr`,
-  `lane_bytes()`.
+- **`Backend`** — the capability ladder. Each variant is named after the
+  `archmage` tier it proves and declared in that tier's dispatch-priority
+  order (strongest first), so the order carries capability and cannot drift
+  from `archmage`'s source of truth. Provides `Backend::ALL`,
+  `name`/`from_name`/`Display`/`FromStr`, and `lane_bytes()`.
 - **`Selection`** — a consumer declares the backends it implements
   (`Selection::supports(&[...])`) and resolves the choice for the current
   host: detected via `summon()`, narrowed to the supported set, then adjusted
-  by the **downgrade-only** `SIMD_BACKEND` override. `Selection::resolve()`
-  is a pure function of the host and the override, so two consumers resolving
-  the same set always agree — the invariant cafft's re-probe broke.
+  by the downgrade-only `SIMD_BACKEND` override. `Selection::resolve()` is a
+  pure function of the host and the override, so two consumers resolving the
+  same set always agree.
 - **`simdispatch::backend()`** — the process-wide resolution of the full
   ladder, detected once per process.
 
 ```rust
 use simdispatch::{Backend, Selection};
 
-// The kernel set this crate ships (example).
+// The kernel set a consumer ships (example).
 const KERNELS: &[Backend] = &[Backend::V3, Backend::V2, Backend::V1, Backend::Scalar];
 let chosen = Selection::new("SIMD_BACKEND").supports(KERNELS).resolve();
 ```
 
+## Usage
+
+The MSRV is Rust 1.89.
+
+`simdispatch` is distributed through git only; it is not published to
+[crates.io](https://crates.io).
+
+```toml
+[dependencies]
+simdispatch = { git = "https://github.com/nanithefkuc/simdispatch" }
+```
+
+Portable `no_std` builds drop runtime detection and report
+`Backend::Scalar` unconditionally:
+
+```toml
+[dependencies]
+simdispatch = { git = "https://github.com/nanithefkuc/simdispatch", default-features = false }
+```
+
+### Features
+
+| Feature | Result |
+| --- | --- |
+| `std` (default) | runtime detection (`summon()`), the `SIMD_BACKEND` override, and process-wide `backend()` |
+| `--no-default-features` | `#![no_std]`, reports `Backend::Scalar` unconditionally, never probes |
+| `internals` | unstable selection internals for benchmarking and downstream experiments; no compatibility promise |
+
+## Backends
+
+Each backend variant maps to one `archmage` tier and a lane width. `name()`
+values are the identifiers accepted by `SIMD_BACKEND`.
+
+| Backend | `name` | Target | Lane bytes |
+| --- | --- | --- | --- |
+| `V3GfniCrypto` | `v3_gfni_crypto` | x86 AVX2 + GFNI + crypto | 32 |
+| `V3` | `v3` | x86 AVX2 split-nibble shuffle | 32 |
+| `V2` | `v2` | x86 SSE4.2 split-nibble shuffle | 16 |
+| `V1` | `v1` | x86 SSE2 baseline | 16 |
+| `NeonAes` | `neon_aes` | AArch64 NEON + AES (proves PMULL) | 16 |
+| `Neon` | `neon` | AArch64 NEON baseline | 16 |
+| `Wasm128` | `wasm128` | WebAssembly `simd128` | 16 |
+| `Scalar` | `scalar` | portable fallback, always present | 8 |
+
 ## `SIMD_BACKEND`
 
-The one stack-wide override, replacing the per-crate `FFF_BACKEND` /
-`CAFFT_BACKEND` as crates migrate. Accepted values are `Backend::name()`
-values (`scalar`, `v1`, `v2`, `v3`, `v3_gfni_crypto`, `neon`, `neon_aes`,
-`wasm128`).
+`SIMD_BACKEND=v3_gfni_crypto|v3|v2|v1|neon_aes|neon|wasm128|scalar` requests a
+backend at process startup.
 
 It is **downgrade-only**. A request is honored only when it names a backend
-the host can run — the request is re-probed with `archmage` `summon()`, the
-same arch-rooted probe detection uses, so `neon` on x86 or a tier the host
-lacks is ignored — it is at most as strong as what detection found (an
-upgrade is refused), and it is in the consumer's supported set. Anything else
-is ignored, never faked. Refusing to upgrade is a soundness property: running
-vector code the CPU cannot execute is undefined behaviour.
-`SIMD_BACKEND=scalar` forces the whole stack to portable code — the escape
-hatch operators and differential-testing need.
+the host can run — the request is re-probed with the same `archmage`
+`summon()` detection uses, so `neon` on x86 or a tier the host lacks is
+ignored — it is at most as strong as what detection found (an upgrade is
+refused), and it is in the consumer's supported set. Anything else is ignored,
+never faked. Refusing to upgrade is a soundness property: running vector code
+the CPU cannot execute is undefined behaviour. `SIMD_BACKEND=scalar` forces the
+whole stack to portable code.
 
 Where a CI job must prove it ran a specific backend, assert the reported
 backend inside the process rather than trusting the request to be honored.
 
-## Features
+## Building
 
-- `std` (default) — runtime detection (`summon()`) + the `SIMD_BACKEND`
-  override + the process-wide `backend()`. Without it the crate is
-  `#![no_std]` and reports `Backend::Scalar` unconditionally.
-- `internals` — unstable selection internals for benchmarking and
-  downstream experiments. Nothing behind it is a compatibility promise.
+`simdispatch` builds on stable Rust (edition 2024, MSRV 1.89) with no extra
+tooling or target-feature flags — the backend is selected at runtime:
+
+```sh
+cargo build                        # default: std detection
+cargo build --no-default-features  # portable no_std, always Scalar
+cargo test --all-features
+```
 
 ## Dependency
 
+`simdispatch` depends on [`archmage`](https://github.com/imazen/archmage) for
+its capability tokens, pinned to a fork rev of
+[`imazen/archmage#66`](https://github.com/imazen/archmage/pull/66)
+(`X64V3GfniCryptoToken` — AVX2 + GFNI without AVX-512) until the PR merges
+upstream:
+
 ```toml
-[dependencies]
 archmage = { git = "https://github.com/nanithefkuc/archmage", rev = "de519319b5670d93f71dada4c49cdfd83c0fc0ec" }
 ```
-
-Pinned to the tip of [`imazen/archmage#66`](https://github.com/imazen/archmage/pull/66)
-(`X64V3GfniCryptoToken` — AVX2 + GFNI without AVX-512) on the author's fork
-until the PR merges upstream. Once merged, re-pin to
-`https://github.com/imazen/archmage` at the merge commit; see
-`.plans/04-conventions.md` for the bump procedure. A fork rev is a temporary
-address; every crate below `simdispatch` consumes this pin, so the swap
-happens here first, in the same sitting as the dependent updates.
 
 ## License
 

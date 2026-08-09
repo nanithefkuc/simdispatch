@@ -125,7 +125,7 @@ fn detect(supported: &[Backend], on_host: impl Fn(Backend) -> bool) -> Backend {
 /// `>=` (weaker-or-equal, downgrade-only) is normally implied by
 /// membership + summoning + `detect` being the strongest summoning tier, so
 /// it reads as the explicit downgrade guard rather than the sole soundness
-/// check — kept per the plan's letter, and a backstop against a caller
+/// check — a backstop against a caller
 /// passing a probe inconsistent with `detect`'s.
 ///
 /// Refusing upgrades is a soundness property, not a preference: running

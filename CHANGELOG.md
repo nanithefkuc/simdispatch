@@ -8,21 +8,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- Name reservation and crate scaffold (P0), renamed from `simdet` to
+- Name reservation and crate scaffold, renamed from `simdet` to
   `simdispatch`. The crate and its git repository now use the permanent name.
 - `archmage` dependency pinned to `de519319b5670d93f71dada4c49cdfd83c0fc0ec`
   — the tip of `imazen/archmage#66` (`X64V3GfniCryptoToken`, AVX2 + GFNI
   without AVX-512) on the author's fork, pending the upstream merge. Re-pin
-  procedure in `.plans/05-conventions.md`.
+  once the pull request merges upstream.
 - Crate documentation set per the ecosystem ground rule: `AGENTS.md`,
   `CHANGELOG.md`, `CONTRIBUTING.md`, the AI-authorship warning header on
   `README.md`, and `LICENSE`.
-- The Level 0 design for the backend selection degrade ladder, in `.plans/`:
-  `Backend` enum ordered by `archmage` tier priority, the single `resolve()`
-  pipeline backing it, and the `SIMD_BACKEND` downgrade-only override.
-
-### Added (P1 — the ladder in `simdispatch`)
-
+- The backend selection degrade ladder design: `Backend` enum ordered by
+  `archmage` tier priority, the single `resolve()` pipeline backing it, and
+  the `SIMD_BACKEND` downgrade-only override.
 - `Backend`: the initial degrade-ladder variants
   (`V3GfniCrypto` / `V3` / `V2` / `V1` / `NeonAes` / `Neon` / `Wasm128` /
   `Scalar`), named after the `archmage` tier they prove and ordered by that
@@ -54,7 +51,7 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 
 - Nothing in the public API yet: version stays `0.0.0` until the first
-  consumer (P2) migrates, per the plan.
+  consumer migrates.
 
 ## [0.0.0] — 2026-07-31
 
