@@ -111,13 +111,13 @@ cargo test --all-features
 ## Dependency
 
 `simdispatch` depends on [`archmage`](https://github.com/imazen/archmage) for
-its capability tokens, pinned to a fork rev of
-[`imazen/archmage#66`](https://github.com/imazen/archmage/pull/66)
-(`X64V3GfniCryptoToken` — AVX2 + GFNI without AVX-512) until the PR merges
-upstream:
+its capability tokens. Pinned exactly to the crates.io release carrying
+`X64V3GfniCryptoToken` — AVX2 + GFNI without AVX-512
+([`imazen/archmage#66`](https://github.com/imazen/archmage/pull/66), merged
+upstream):
 
 ```toml
-archmage = { git = "https://github.com/nanithefkuc/archmage", rev = "de519319b5670d93f71dada4c49cdfd83c0fc0ec" }
+archmage = "=0.9.29"
 ```
 
 ## License

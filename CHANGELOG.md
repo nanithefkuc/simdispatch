@@ -10,10 +10,9 @@ All notable changes to this project are documented here. The format follows
 
 - Name reservation and crate scaffold, renamed from `simdet` to
   `simdispatch`. The crate and its git repository now use the permanent name.
-- `archmage` dependency pinned to `de519319b5670d93f71dada4c49cdfd83c0fc0ec`
-  — the tip of `imazen/archmage#66` (`X64V3GfniCryptoToken`, AVX2 + GFNI
-  without AVX-512) on the author's fork, pending the upstream merge. Re-pin
-  once the pull request merges upstream.
+- `archmage` dependency pinned exactly at `=0.9.29` from crates.io — the
+  first release carrying `X64V3GfniCryptoToken` (AVX2 + GFNI without
+  AVX-512, `imazen/archmage#66`, merged upstream).
 - Crate documentation set per the ecosystem ground rule: `AGENTS.md`,
   `CHANGELOG.md`, `CONTRIBUTING.md`, the AI-authorship warning header on
   `README.md`, and `LICENSE`.

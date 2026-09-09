@@ -37,10 +37,12 @@ archmage adoption); this crate never touches kernel bodies.
    are deleted as crates migrate.
 4. **No kernels, no intrinsics, no `unsafe`.** `#![deny(unsafe_code)]` at the
    root. This crate composes proofs, it does not compute bytes.
-5. **One runtime dependency: `archmage`, pinned by rev until
-   `imazen/archmage#66` merges.** Bootstrapping on a fork rev is temporary;
-   re-pin to the upstream merge commit once that pull request lands. No other
-   runtime dependency may be added without the umbrella exception process.
+5. **One runtime dependency: `archmage`, pinned exactly from crates.io.** The
+   pin is `=0.9.29` — the first release carrying `X64V3GfniCryptoToken`
+   (`imazen/archmage#66`, merged upstream). No floating range: tier ordering
+   feeds the downgrade check, so a bump is a deliberate re-pin that re-runs
+   the ordering test. No other runtime dependency may be added without the
+   umbrella exception process.
 6. **`internals` is unstable by contract.** The `internals` feature exposes
    `pub(crate)` items for benchmarking and downstream experiments; nothing
    behind it is a compatibility promise.

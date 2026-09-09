@@ -22,10 +22,8 @@ std = []
 internals = []
 
 [dependencies]
-# Temporary pin until imazen/archmage#66 merges upstream. That PR adds
-# X64V3GfniCryptoToken — AVX2 + GFNI without AVX-512 — the token this crate's
-# degrade ladder sits on. Pinned to the tip of the author's fork branch;
-# once merged, re-pin to https://github.com/imazen/archmage at the merge
-# commit. Every crate below simdispatch consumes this pin, so swap it here
-# first, in the same sitting as the dependent updates.
-archmage = { git = "https://github.com/nanithefkuc/archmage", rev = "de519319b5670d93f71dada4c49cdfd83c0fc0ec" }
+# Released upstream: 0.9.29 carries X64V3GfniCryptoToken — AVX2 + GFNI
+# without AVX-512 — the token this crate's degrade ladder sits on. Pinned
+# exactly: tier ordering feeds the downgrade check, so a floating range must
+# not silently move the ladder under a rebuild.
+archmage = "=0.9.29"
