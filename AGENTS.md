@@ -2,8 +2,9 @@
 
 Authority for the `simdispatch` crate: the Level 0 SIMD capability selection
 backend that every SIMD-accelerated crate in the FEC stack consumes. If a rule
-lives here, it outranks a habit inherited from `fff`, `cafft`, or anywhere
-else — this crate is the single source for backend detection and ordering.
+lives here, it outranks a habit inherited from `fgf`, `butterfly-fft`, or
+anywhere else in the stack — this crate is the single source for backend
+detection and ordering.
 
 ## What this is
 
@@ -25,14 +26,14 @@ archmage adoption); this crate never touches kernel bodies.
 2. **Detection is single-source: `summon()`.** The only host probe in the
    stack is `archmage`'s token `summon()`. No crate re-implements CPUID or
    `std::is_*_feature_detected!` on top of it. This crate ships the one
-   `resolve()` pipeline; `fff`'s `detect()`, `cafft`'s `cap()` and
-   `supported_on_host()`, and per-crate re-probing are the defect class this
-   crate exists to delete.
+   `resolve()` pipeline; `fgf`'s historical `detect()`, `butterfly-fft`'s
+   historical `cap()` and `supported_on_host()`, and per-crate re-probing are
+   the defect class this crate exists to delete.
 3. **`SIMD_BACKEND` is downgrade-only.** The override accepts a backend only
    if the host can run it and it is at most what detection found. Refusing to
    upgrade is a soundness property: running vector code the CPU cannot execute
    is undefined behaviour, not a preference. There is exactly one override for
-   the whole stack; per-crate overrides (`FFF_BACKEND`, `CAFFT_BACKEND`, …)
+   whole stack; per-crate overrides (`FFF_BACKEND`, `BUTTERFLY_FFT_BACKEND`, …)
    are deleted as crates migrate.
 4. **No kernels, no intrinsics, no `unsafe`.** `#![deny(unsafe_code)]` at the
    root. This crate composes proofs, it does not compute bytes.
@@ -44,17 +45,21 @@ archmage adoption); this crate never touches kernel bodies.
    `pub(crate)` items for benchmarking and downstream experiments; nothing
    behind it is a compatibility promise.
 
-## What consumers must not do (this crate owns backend selection)
+## Testing
 
+- Tests: ordering pinned to the `archmage` `tiers.rs` mirror, narrowing
+  (including the butterfly-fft regression), downgrade-only override,
+  cross-family refusal, host-floor invariants (cfg-gated), and the real
+  environment `SIMD_BACKEND` override test.
 - Do **not** re-derive capability in a consumer (`cap()`, `supported_on_host`,
   a per-crate env override). Selection is single-source here (umbrella
   `AGENTS.md`, "Backend selection is single-source").
 - Do **not** hardcode an ordered ladder in a consumer. A consumer declares the
   *set* of backends it implements (`Selection::supports(&[…])`); order and
   host proof come from this crate + `archmage`.
-- Do **not** name a backend by its historical `fff`/`cafft` semantic label
-  (`Gfni`, `Avx2`, `Ssse3`, `Pmull`) in new code. Variants are named after the
-  `archmage` tier they prove, so the ladder cannot drift from the source of
+- Do **not** name a backend by its historical `fff`/`butterfly-fft` semantic
+  label (`Gfni`, `Avx2`, `Ssse3`, `Pmull`) in new code. Variants are named after
+  the `archmage` tier they prove, so the ladder cannot drift from the source of
   truth.
 
 ## Cross-crate invariants
