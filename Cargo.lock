@@ -50,7 +50,7 @@ checksum = "f9c874fb993656d484725d58fbfddb39dfcf98ebcadc1a1d09568aa6b39bafba"
 
 [[package]]
 name = "simdispatch"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "archmage",
 ]
