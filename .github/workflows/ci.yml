@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+# The selection tests inject host proofs for every rung. A hosted runner cannot
+# establish that V4 or V4x actually ran, so there is no forced AVX-512 job.
+# The scalar override does have a host-independent, observable result.
+jobs:
+  validate:
+    name: validate and scalar override
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: extractions/setup-just@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.9.0
+      - run: just validate
+      - run: just test
+        env:
+          SIMD_BACKEND: scalar
+
+  msrv:
+    name: msrv 1.89
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The toolchain name must match `MSRV` in crate.just: `just msrv` runs
+      # `cargo +1.89`.
+      - uses: dtolnay/rust-toolchain@1.89
+      - uses: Swatinem/rust-cache@v2
+      - uses: extractions/setup-just@v2
+      - run: just msrv

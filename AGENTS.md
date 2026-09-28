@@ -15,6 +15,29 @@ naming/ordering layer, a per-crate supported-set cap, and the downgrade-only
 Consumers keep every kernel (`#[target_feature]` today, `#[arcane]` after the
 archmage adoption); this crate never touches kernel bodies.
 
+## Tooling
+
+`just validate` is the pull-request gate. The shared recipe surface is
+documented once in the umbrella's root `AGENTS.md`; only what is specific to
+this crate is written here.
+
+- **`TIERS` is empty.** This crate *resolves* backends, it does not dispatch
+  over them — there are no kernels, so re-running the suite once per tier would
+  measure nothing new. `just test-tiers` says so and runs the host
+  configuration only. Ladder behaviour (narrowing, the downgrade-only
+  override, cross-family refusal, and the real `SIMD_BACKEND` environment case)
+  is asserted inside the tests themselves.
+- **`MIRI` is empty**, which is ground rule 4 restated: `#![deny(unsafe_code)]`
+  leaves nothing for miri to check, and `just unsafe-check` reports that and
+  skips. That is not a gap to fill.
+- **No bench targets.** There is no `benches/`; capability ordering is
+  canonical rather than measured, so `just bench` and `just perf-bench` have
+  nothing to run. `COV_IGNORE` is empty — every line counts toward the 95%
+  gate.
+- `justfile` is a byte-identical vendored copy and is never edited here; the
+  umbrella's `just drift` check fails on a modified copy. Crate-specific values
+  and any recipe unique to `simdispatch` belong in `crate.just`.
+
 ## Ground rules (do not break)
 
 1. **`archmage`'s ordering is our ordering.** `Backend` variant order

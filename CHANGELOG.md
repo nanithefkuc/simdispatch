@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- CI runs the crate validation gate, checks the minimum supported Rust
+  toolchain, and exercises the scalar environment override on a hosted runner.
+
 ## [0.2.0] — 2026-09-28
 
 ### Added
