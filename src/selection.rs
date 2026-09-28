@@ -64,6 +64,7 @@ impl Selection {
     ///    keep the detected value. A request for a backend the host cannot
     ///    run — a different arch (`neon` on x86) or a tier the host lacks
     ///    (`v2` on a V1-only host) — does not summon and is ignored.
+    ///    `v4` and `v4x` require the `avx512` feature as well as summoning tokens.
     ///
     /// Without the `std` feature there is no environment and no runtime
     /// detection, so this reports [`Backend::Scalar`] unconditionally.
@@ -201,7 +202,12 @@ mod tests {
         |b: Backend| {
             matches!(
                 b,
-                Backend::V3GfniCrypto | Backend::V3 | Backend::V2 | Backend::V1
+                Backend::V4x
+                    | Backend::V4
+                    | Backend::V3GfniCrypto
+                    | Backend::V3
+                    | Backend::V2
+                    | Backend::V1
             )
         }
     }
@@ -226,7 +232,7 @@ mod tests {
             detect(&[Backend::V1, Backend::V2, Backend::V3], x86_host()),
             Backend::V3
         );
-        assert_eq!(detect(Backend::ALL, full_host()), Backend::V3GfniCrypto);
+        assert_eq!(detect(Backend::ALL, full_host()), Backend::V4x);
     }
 
     #[test]
@@ -249,6 +255,15 @@ mod tests {
             detect(&[Backend::V3, Backend::V2, Backend::V1], x86_host()),
             Backend::V3
         );
+        assert_eq!(detect(Backend::ALL, |b| b != Backend::V4x), Backend::V4);
+        assert_eq!(
+            detect(Backend::ALL, |b| b != Backend::V4x && b != Backend::V4),
+            Backend::V3GfniCrypto
+        );
+        assert_eq!(
+            detect(&[Backend::V3GfniCrypto, Backend::V3], full_host()),
+            Backend::V3GfniCrypto
+        );
         assert_eq!(
             detect(&[Backend::V1, Backend::Neon], x86_host()),
             Backend::V1
@@ -263,7 +278,7 @@ mod tests {
         // strongest host; Scalar always summons so it is accepted as a
         // downgrade on any of them.
         let detected = detect(Backend::ALL, full_host());
-        assert_eq!(detected, Backend::V3GfniCrypto);
+        assert_eq!(detected, Backend::V4x);
         assert_eq!(
             apply_override(Backend::ALL, detected, Some(Backend::Scalar), full_host()),
             Backend::Scalar
@@ -290,13 +305,23 @@ mod tests {
     #[test]
     fn override_within_family_downgrades() {
         const SET: &[Backend] = &[
+            Backend::V4x,
+            Backend::V4,
             Backend::V3GfniCrypto,
             Backend::V3,
             Backend::V2,
             Backend::V1,
             Backend::Scalar,
         ];
-        let detected = Backend::V3GfniCrypto;
+        let detected = Backend::V4x;
+        assert_eq!(
+            apply_override(SET, detected, Some(Backend::V4), full_host()),
+            Backend::V4
+        );
+        assert_eq!(
+            apply_override(SET, detected, Some(Backend::V3GfniCrypto), full_host()),
+            Backend::V3GfniCrypto
+        );
         assert_eq!(
             apply_override(SET, detected, Some(Backend::V2), full_host()),
             Backend::V2
@@ -307,7 +332,34 @@ mod tests {
         );
         // Same-strength request is a no-op downgrade.
         assert_eq!(
-            apply_override(SET, detected, Some(Backend::V3GfniCrypto), full_host()),
+            apply_override(SET, detected, Some(Backend::V4x), full_host()),
+            Backend::V4x
+        );
+    }
+
+    #[test]
+    fn avx512_request_without_host_proof_is_ignored() {
+        const SET: &[Backend] = &[
+            Backend::V4x,
+            Backend::V4,
+            Backend::V3GfniCrypto,
+            Backend::Scalar,
+        ];
+        let on_host = |b| b != Backend::V4x;
+        assert_eq!(detect(SET, on_host), Backend::V4);
+        assert_eq!(
+            apply_override(SET, Backend::V4, Some(Backend::V4x), on_host),
+            Backend::V4
+        );
+        let without_avx512 = |b| b != Backend::V4x && b != Backend::V4;
+        assert_eq!(detect(SET, without_avx512), Backend::V3GfniCrypto);
+        assert_eq!(
+            apply_override(
+                SET,
+                Backend::V3GfniCrypto,
+                Some(Backend::V4),
+                without_avx512
+            ),
             Backend::V3GfniCrypto
         );
     }
@@ -390,7 +442,12 @@ mod tests {
         assert!(
             matches!(
                 detected,
-                Backend::V3GfniCrypto | Backend::V3 | Backend::V2 | Backend::V1
+                Backend::V4x
+                    | Backend::V4
+                    | Backend::V3GfniCrypto
+                    | Backend::V3
+                    | Backend::V2
+                    | Backend::V1
             ),
             "detected {detected:?} on x86_64"
         );

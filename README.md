@@ -61,6 +61,7 @@ simdispatch = { git = "https://github.com/nanithefkuc/simdispatch", default-feat
 | Feature | Result |
 | --- | --- |
 | `std` (default) | runtime detection (`summon()`), the `SIMD_BACKEND` override, and process-wide `backend()` |
+| `avx512` | enables `archmage/avx512` and V4/V4x detection on capable x86 hosts |
 | `--no-default-features` | `#![no_std]`, reports `Backend::Scalar` unconditionally, never probes |
 | `internals` | unstable selection internals for benchmarking and downstream experiments; no compatibility promise |
 
@@ -71,6 +72,8 @@ values are the identifiers accepted by `SIMD_BACKEND`.
 
 | Backend | `name` | Target | Lane bytes |
 | --- | --- | --- | --- |
+| `V4x` | `v4x` | x86 AVX-512 + GFNI + vector crypto (`avx512` feature) | 64 |
+| `V4` | `v4` | x86 AVX-512F/BW/CD/DQ/VL, without a GFNI guarantee (`avx512` feature) | 64 |
 | `V3GfniCrypto` | `v3_gfni_crypto` | x86 AVX2 + GFNI + crypto | 32 |
 | `V3` | `v3` | x86 AVX2 split-nibble shuffle | 32 |
 | `V2` | `v2` | x86 SSE4.2 split-nibble shuffle | 16 |
@@ -82,8 +85,16 @@ values are the identifiers accepted by `SIMD_BACKEND`.
 
 ## `SIMD_BACKEND`
 
-`SIMD_BACKEND=v3_gfni_crypto|v3|v2|v1|neon_aes|neon|wasm128|scalar` requests a
+`SIMD_BACKEND=v4x|v4|v3_gfni_crypto|v3|v2|v1|neon_aes|neon|wasm128|scalar` requests a
 backend at process startup.
+
+Without `avx512`, `v4` and `v4x` remain recognized names but never summon,
+even on an AVX-512 host. With the feature enabled, V4 is selectable when V4x
+is unavailable. V4 does not prove GFNI: consumers using GFNI instructions
+must not declare V4 for those kernels. V4x proves GFNI but also requires
+VPOPCNTDQ, IFMA, VBMI, VBMI2, BITALG, VNNI, VPCLMULQDQ and VAES beyond
+the V4 feature set. A host with V4 and GFNI but without those extensions
+can select V4 for a non-GFNI kernel or a lower GFNI-capable tier.
 
 It is **downgrade-only**. A request is honored only when it names a backend
 the host can run — the request is re-probed with the same `archmage`

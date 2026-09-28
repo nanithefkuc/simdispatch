@@ -39,6 +39,8 @@ fn subset_result_is_supported_or_scalar() {
     // implements, or Scalar when none of them can run. Never a tier the
     // consumer did not declare.
     let subsets: &[&[Backend]] = &[
+        &[Backend::V4x, Backend::V4, Backend::V3GfniCrypto],
+        &[Backend::V4x, Backend::V3GfniCrypto, Backend::Scalar],
         &[Backend::V2, Backend::V1],
         &[Backend::V3GfniCrypto, Backend::V3],
         &[Backend::NeonAes, Backend::Neon],
@@ -52,6 +54,46 @@ fn subset_result_is_supported_or_scalar() {
             "resolved {resolved:?} for supported {set:?}"
         );
     }
+}
+
+#[test]
+#[cfg(all(feature = "std", target_arch = "x86_64"))]
+fn avx512_selection_respects_archmage_proofs_and_supported_set() {
+    use archmage::{SimdToken, X64V4Token, X64V4xToken};
+
+    let has_v4x = X64V4xToken::summon().is_some();
+    let has_v4 = X64V4Token::summon().is_some();
+    let selected = resolve_supported(&[Backend::V4x, Backend::V4, Backend::V3GfniCrypto]);
+    let requested = std::env::var("SIMD_BACKEND").ok();
+    if cfg!(feature = "avx512") && std::env::var_os("SIMDISPATCH_REQUIRE_V4X").is_some() {
+        assert!(has_v4x, "V4x token did not summon on the required host");
+        assert_eq!(selected, Backend::V4x);
+        assert!(has_v4, "V4 token did not summon on the required host");
+    }
+    if !cfg!(feature = "avx512") || !has_v4x {
+        assert_ne!(selected, Backend::V4x);
+    } else if requested.is_none() {
+        assert_eq!(selected, Backend::V4x);
+    }
+    if !cfg!(feature = "avx512") || !has_v4 {
+        assert_ne!(selected, Backend::V4);
+    } else if !has_v4x && requested.is_none() {
+        assert_eq!(selected, Backend::V4);
+    }
+    if cfg!(feature = "avx512") && has_v4 && requested.is_none() {
+        assert_eq!(
+            resolve_supported(&[Backend::V4, Backend::V3GfniCrypto]),
+            Backend::V4
+        );
+    }
+    if requested.as_deref() == Some("v4") && cfg!(feature = "avx512") && has_v4 {
+        assert_eq!(selected, Backend::V4);
+    }
+    assert_ne!(
+        resolve_supported(&[Backend::V4, Backend::V3GfniCrypto]),
+        Backend::V4x
+    );
+    assert_ne!(resolve_supported(&[Backend::V3GfniCrypto]), Backend::V4x);
 }
 
 #[test]
