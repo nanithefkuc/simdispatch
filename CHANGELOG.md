@@ -10,16 +10,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- `V4x` detection via `X64V4xToken` when the `avx512` feature is enabled,
-  including the `v4x` override name and lane width. Without the feature or a
-  summoning token, selection degrades to the strongest supported lower tier.
+- `V4x` and `V4` detection via their Archmage tokens when the `avx512`
+  feature is enabled, including their override names and lane widths. Without
+  the feature or a summoning token, selection degrades to the strongest
+  supported lower tier. V4 does not prove GFNI; V4x requires additional
+  extensions beyond AVX-512F/BW/GFNI.
 
 ### Changed
 
-- **Breaking:** Adding `V4x` to `Backend::ALL` and the ordering changes the
+- **Breaking:** Adding `V4x` and `V4` to `Backend::ALL` changes the
   full-ladder resolution on capable hosts. Consumers using `backend()` for
   kernel dispatch must switch to `Selection::supports` with their implemented
-  tiers, and enable `avx512` only when they implement V4x.
+  tiers, and enable `avx512` only when they implement V4 or V4x.
 
 ## [0.1.0] — 2026-09-09
 
