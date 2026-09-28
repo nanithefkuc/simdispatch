@@ -4,6 +4,8 @@ use core::fmt;
 use core::str::FromStr;
 
 // The capability tokens back `probes_on_host`, the std-only runtime probe.
+#[cfg(all(feature = "std", feature = "avx512"))]
+use archmage::X64V4xToken;
 #[cfg(feature = "std")]
 use archmage::{
     NeonAesToken, NeonToken, ScalarToken, SimdToken, Wasm128Token, X64V1Token, X64V2Token,
@@ -30,6 +32,9 @@ use archmage::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[non_exhaustive]
 pub enum Backend {
+    /// x86 AVX-512 with GFNI and vector crypto (`X64V4xToken`, priority 50).
+    /// Detection requires the `avx512` feature.
+    V4x,
     /// x86 AVX2 + GFNI + crypto, 32-byte GFNI field multiply
     /// (`X64V3GfniCryptoToken`, `tiers.rs` priority 37).
     V3GfniCrypto,
@@ -56,6 +61,7 @@ impl Backend {
     /// `&'static` slice (not an array) so adding a tier is not a breaking
     /// change to the type.
     pub const ALL: &'static [Backend] = &[
+        Backend::V4x,
         Backend::V3GfniCrypto,
         Backend::V3,
         Backend::V2,
@@ -71,6 +77,7 @@ impl Backend {
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
+            Backend::V4x => "v4x",
             Backend::V3GfniCrypto => "v3_gfni_crypto",
             Backend::V3 => "v3",
             Backend::V2 => "v2",
@@ -86,6 +93,7 @@ impl Backend {
     #[must_use]
     pub fn from_name(name: &str) -> Option<Backend> {
         Some(match name {
+            "v4x" => Backend::V4x,
             "v3_gfni_crypto" => Backend::V3GfniCrypto,
             "v3" => Backend::V3,
             "v2" => Backend::V2,
@@ -104,6 +112,7 @@ impl Backend {
     #[must_use]
     pub const fn lane_bytes(self) -> usize {
         match self {
+            Backend::V4x => 64,
             Backend::V3GfniCrypto | Backend::V3 => 32,
             Backend::V2 | Backend::V1 | Backend::NeonAes | Backend::Neon | Backend::Wasm128 => 16,
             Backend::Scalar => 8,
@@ -120,6 +129,10 @@ impl Backend {
     #[must_use]
     pub(crate) fn probes_on_host(self) -> bool {
         match self {
+            #[cfg(feature = "avx512")]
+            Backend::V4x => X64V4xToken::summon().is_some(),
+            #[cfg(not(feature = "avx512"))]
+            Backend::V4x => false,
             Backend::V3GfniCrypto => X64V3GfniCryptoToken::summon().is_some(),
             Backend::V3 => X64V3Token::summon().is_some(),
             Backend::V2 => X64V2Token::summon().is_some(),
@@ -169,6 +182,7 @@ mod tests {
     /// it must be regenerated on every `archmage` rev bump, and the ladder
     /// must be reconciled with upstream rather than reordered locally.
     const TIERS_RS_MIRROR: &[(Backend, u32)] = &[
+        (Backend::V4x, 50),
         (Backend::V3GfniCrypto, 37),
         (Backend::V3, 30),
         (Backend::V2, 20),
@@ -184,7 +198,7 @@ mod tests {
         // The mirror and the ladder must line up exactly (same length, same
         // order) or this fails — adding a tier without updating the mirror is
         // a build error of the canary.
-        let mut mirrored_order = [Backend::Scalar; 8];
+        let mut mirrored_order = [Backend::Scalar; 9];
         for (i, &(backend, _)) in TIERS_RS_MIRROR.iter().enumerate() {
             mirrored_order[i] = backend;
         }
@@ -194,6 +208,7 @@ mod tests {
     #[test]
     fn order_encodes_capability_within_family() {
         // Stronger sorts less; weaker sorts greater.
+        assert!(Backend::V4x < Backend::V3GfniCrypto);
         assert!(Backend::V3GfniCrypto < Backend::V3);
         assert!(Backend::V3 < Backend::V2);
         assert!(Backend::V2 < Backend::V1);
@@ -208,6 +223,7 @@ mod tests {
 
     #[test]
     fn lane_bytes_are_architectural() {
+        assert_eq!(Backend::V4x.lane_bytes(), 64);
         assert_eq!(Backend::V3GfniCrypto.lane_bytes(), 32);
         assert_eq!(Backend::V3.lane_bytes(), 32);
         assert_eq!(Backend::V2.lane_bytes(), 16);
@@ -281,6 +297,21 @@ mod tests {
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
     fn v1_always_summons_on_x86_64() {
         assert!(Backend::V1.probes_on_host());
+    }
+
+    #[test]
+    #[cfg(all(feature = "std", not(feature = "avx512")))]
+    fn v4x_does_not_summon_without_avx512() {
+        assert!(!Backend::V4x.probes_on_host());
+    }
+
+    #[test]
+    #[cfg(all(feature = "std", feature = "avx512"))]
+    fn v4x_probe_matches_archmage_token() {
+        assert_eq!(
+            Backend::V4x.probes_on_host(),
+            X64V4xToken::summon().is_some()
+        );
     }
 
     #[test]

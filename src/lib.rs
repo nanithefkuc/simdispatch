@@ -31,10 +31,11 @@
 //!
 //! The one stack-wide override, replacing the per-crate `FFF_BACKEND` /
 //! `CAFFT_BACKEND` as crates migrate. Accepted values are
-//! [`Backend::name()`] values (`scalar`, `v1`, `v2`, `v3`, `v3_gfni_crypto`,
+//! [`Backend::name()`] values (`scalar`, `v1`, `v2`, `v3`, `v3_gfni_crypto`, `v4x`,
 //! `neon`, `neon_aes`, `wasm128`). It is **downgrade-only**: a request for a
 //! backend the host cannot run, or one stronger than what detection found, is
-//! ignored. `SIMD_BACKEND=scalar` forces the whole stack to portable code —
+//! ignored. The `v4x` tier is available with the `avx512` feature.
+//! `SIMD_BACKEND=scalar` forces the whole stack to portable code —
 //! the escape hatch operators and differential testing need.
 //!
 //! ## `no_std`
@@ -139,7 +140,7 @@ mod tests {
             assert!(
                 matches!(
                     backend,
-                    Backend::V3GfniCrypto | Backend::V3 | Backend::V2 | Backend::V1
+                    Backend::V4x | Backend::V3GfniCrypto | Backend::V3 | Backend::V2 | Backend::V1
                 ),
                 "full ladder resolved to {backend:?} on x86_64"
             );

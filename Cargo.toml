@@ -1,6 +1,6 @@
 [package]
 name = "simdispatch"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.89"
 description = "Runtime SIMD backend detection and downgrade-only selection, shared across SIMD-accelerated crates"
@@ -17,6 +17,8 @@ default = ["std"]
 # override + the process-wide `backend()`. Without `std`, resolution reports
 # `Backend::Scalar` unconditionally.
 std = []
+# Enable the V4x AVX-512 tier and its archmage capability proof.
+avx512 = ["archmage/avx512"]
 # Unstable internals for benchmarking and downstream experimentation
 # (`selection::internals`). Nothing behind it is a compatibility promise.
 internals = []

@@ -61,6 +61,7 @@ simdispatch = { git = "https://github.com/nanithefkuc/simdispatch", default-feat
 | Feature | Result |
 | --- | --- |
 | `std` (default) | runtime detection (`summon()`), the `SIMD_BACKEND` override, and process-wide `backend()` |
+| `avx512` | enables `archmage/avx512` and V4x detection on capable x86 hosts |
 | `--no-default-features` | `#![no_std]`, reports `Backend::Scalar` unconditionally, never probes |
 | `internals` | unstable selection internals for benchmarking and downstream experiments; no compatibility promise |
 
@@ -71,6 +72,7 @@ values are the identifiers accepted by `SIMD_BACKEND`.
 
 | Backend | `name` | Target | Lane bytes |
 | --- | --- | --- | --- |
+| `V4x` | `v4x` | x86 AVX-512 + GFNI + vector crypto (`avx512` feature) | 64 |
 | `V3GfniCrypto` | `v3_gfni_crypto` | x86 AVX2 + GFNI + crypto | 32 |
 | `V3` | `v3` | x86 AVX2 split-nibble shuffle | 32 |
 | `V2` | `v2` | x86 SSE4.2 split-nibble shuffle | 16 |
@@ -82,8 +84,11 @@ values are the identifiers accepted by `SIMD_BACKEND`.
 
 ## `SIMD_BACKEND`
 
-`SIMD_BACKEND=v3_gfni_crypto|v3|v2|v1|neon_aes|neon|wasm128|scalar` requests a
+`SIMD_BACKEND=v4x|v3_gfni_crypto|v3|v2|v1|neon_aes|neon|wasm128|scalar` requests a
 backend at process startup.
+
+Without `avx512`, `v4x` remains a recognized name but never summons, even on
+an AVX-512 host; selection falls back to the strongest supported lower tier.
 
 It is **downgrade-only**. A request is honored only when it names a backend
 the host can run — the request is re-probed with the same `archmage`

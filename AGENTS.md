@@ -79,8 +79,8 @@ archmage adoption); this crate never touches kernel bodies.
   proof — gate it down, don't widen the token silently.
 - **`v4`/`v4x` require the `archmage` `avx512` cargo feature.** These tiers do
   not summon (do not even compile their dispatch) unless that feature is on.
-  Consumers that implement them enable it; the ladder otherwise tops out at
-  `v3_gfni_crypto`.
+  Consumers that implement `v4x` enable `simdispatch/avx512`; the ladder
+  otherwise tops out at `v3_gfni_crypto`.
 - **`lane_bytes()` is architectural and lives here.** 64/32/16/8 per tier;
   consumers deriving buffer geometry from a backend import it, never re-derive.
 

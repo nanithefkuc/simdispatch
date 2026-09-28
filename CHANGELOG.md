@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-28
+
+### Added
+
+- `V4x` detection via `X64V4xToken` when the `avx512` feature is enabled,
+  including the `v4x` override name and lane width. Without the feature or a
+  summoning token, selection degrades to the strongest supported lower tier.
+
+### Changed
+
+- **Breaking:** Adding `V4x` to `Backend::ALL` and the ordering changes the
+  full-ladder resolution on capable hosts. Consumers using `backend()` for
+  kernel dispatch must switch to `Selection::supports` with their implemented
+  tiers, and enable `avx512` only when they implement V4x.
+
+## [0.1.0] — 2026-09-09
+
 ### Added
 
 - Name reservation and crate scaffold, renamed from `simdet` to
@@ -23,8 +40,7 @@ All notable changes to this project are documented here. The format follows
   (`V3GfniCrypto` / `V3` / `V2` / `V1` / `NeonAes` / `Neon` / `Wasm128` /
   `Scalar`), named after the `archmage` tier they prove and ordered by that
   tier's dispatch priority. Weak `Ord` sorts greater (the fff convention, so
-  `requested >= detected` downgrade checks port unchanged). `V4x` is deferred
-  until a validated 512-bit kernel exists.
+  `requested >= detected` downgrade checks port unchanged).
 - `Backend::ALL: &'static [Backend]`; `name` / `from_name` / `Display` /
   `FromStr` / `ParseBackendError`; `lane_bytes()`; the arch-family mapping.
 - `Selection`: declare the supported set with `supports(&[...])`, resolve for
@@ -47,11 +63,6 @@ All notable changes to this project are documented here. The format follows
   refusal, host-floor invariants (cfg-gated), and the real-environment
   `SIMD_BACKEND` override test.
 
-### Changed
-
-- Nothing in the public API yet: version stays `0.0.0` until the first
-  consumer migrates.
-
 ## [0.0.0] — 2026-07-31
 
 ### Added
@@ -60,3 +71,5 @@ All notable changes to this project are documented here. The format follows
   code.
 
 [0.0.0]: https://github.com/nanithefkuc/simdispatch/commits/main
+[0.1.0]: https://github.com/nanithefkuc/simdispatch/compare/b7c921f...f78b369
+[0.2.0]: https://github.com/nanithefkuc/simdispatch/compare/f78b369...main
