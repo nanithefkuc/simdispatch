@@ -8,8 +8,31 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `just sve-runtime`: QEMU execution at multiple vector lengths with
+  direct scalar comparisons for SVE/SVE2/SVE2-AES intrinsics, paired
+  carryless-product layout, and actual capability/override assertions.
+
 - CI runs the crate validation gate, checks the minimum supported Rust
   toolchain, and exercises the scalar environment override on a hosted runner.
+- **`sve` feature (off by default):** the AArch64 scalable-vector capability
+  surface — `Backend::Sve2Aes` / `Sve2` / `Sve` (override names `sve2_aes`,
+  `sve2`, `sve`) ordered between the x86 and NEON ladders, the zero-sized
+  proof tokens `simdispatch::arch::aarch64::{SveToken, Sve2Token,
+  Sve2AesToken}` minted through archmage's
+  `is_aarch64_feature_available!`, and the raw `core::arch::aarch64`
+  re-export. The surface compiles only where `build.rs` confirms a
+  little-endian AArch64 target and a nightly at or above the verified floor
+  (release 1.101.0-nightly, commit date 2026-09-27 — the `nightly-2026-09-28`
+  distribution); on stable and everywhere else the feature is inert with a
+  visible build warning and the three names never summon. **Breaking:**
+  adding the tiers to `Backend::ALL` changes full-ladder resolution on SVE
+  hosts built with the feature — consumers dispatch on
+  `Selection::supports` with their implemented tiers.
+- `Backend::lane_bytes_on_host()`: the tier's width on the current host and
+  thread. Fixed-width tiers equal `lane_bytes()`; the scalable tiers report
+  the thread's current SVE vector length after a proof summons (the
+  architectural minimum otherwise), where the const `lane_bytes()` stays the
+  16-byte minimum.
 
 ## [0.2.0] — 2026-09-28
 

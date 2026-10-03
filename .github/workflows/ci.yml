@@ -42,3 +42,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: extractions/setup-just@v2
       - run: just msrv
+
+  sve-check:
+    name: pinned-nightly SVE cross-verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The toolchain must match `SVE_NIGHTLY` in crate.just: `just
+      # sve-check` runs `cargo +nightly-2026-09-28` against this target.
+      - uses: dtolnay/rust-toolchain@nightly-2026-09-28
+        with:
+          components: clippy
+          targets: aarch64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+      - uses: extractions/setup-just@v2
+      - run: just sve-check

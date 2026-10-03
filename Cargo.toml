@@ -8,8 +8,9 @@ license = "MIT"
 repository = "https://github.com/nanithefkuc/simdispatch"
 homepage = "https://github.com/nanithefkuc/simdispatch"
 readme = "README.md"
+build = "build.rs"
 # Only library sources and public release documentation enter the package.
-include = ["src/**", "/README.md", "/CHANGELOG.md", "/LICENSE"]
+include = ["src/**", "/build.rs", "/README.md", "/CHANGELOG.md", "/LICENSE"]
 keywords = ["simd", "cpu-features", "dispatch", "detection", "runtime"]
 categories = ["hardware-support", "no-std", "algorithms"]
 
@@ -21,6 +22,10 @@ default = ["std"]
 std = []
 # Enable the V4 and V4x AVX-512 tiers and their archmage capability proofs.
 avx512 = ["archmage/avx512"]
+# Nightly-only SVE/SVE2/SVE2-AES capability surface. Inert, with a visible
+# build warning, anywhere build.rs does not confirm a little-endian aarch64
+# target and an eligible nightly compiler.
+sve = []
 # Unstable internals for benchmarking and downstream experimentation
 # (`selection::internals`). Nothing behind it is a compatibility promise.
 internals = []
@@ -31,3 +36,12 @@ internals = []
 # exactly: tier ordering feeds the downgrade check, so a floating range must
 # not silently move the ladder under a rebuild.
 archmage = "=0.9.29"
+
+[[example]]
+name = "sve_intrinsics"
+crate-type = ["lib"]
+required-features = ["sve"]
+
+[[test]]
+name = "sve_runtime"
+required-features = ["sve"]

@@ -224,6 +224,39 @@ mod tests {
         |b: Backend| matches!(b, Backend::V1 | Backend::Scalar)
     }
 
+    /// Simulated AArch64 host with every scalable tier: SVE2-AES implies
+    /// SVE2 and SVE, and the extension's AES requirement brings NEON AES.
+    fn sve2_aes_host() -> impl Fn(Backend) -> bool {
+        |b: Backend| {
+            matches!(
+                b,
+                Backend::Sve2Aes
+                    | Backend::Sve2
+                    | Backend::Sve
+                    | Backend::NeonAes
+                    | Backend::Neon
+                    | Backend::Scalar
+            )
+        }
+    }
+
+    /// Simulated AArch64 host with base SVE2 but not the optional AES
+    /// extension: the extension is independently unavailable.
+    fn sve2_host_without_aes() -> impl Fn(Backend) -> bool {
+        |b: Backend| {
+            matches!(
+                b,
+                Backend::Sve2 | Backend::Sve | Backend::NeonAes | Backend::Neon | Backend::Scalar
+            )
+        }
+    }
+
+    /// Simulated AArch64 host with base SVE only: NEON is the aarch64
+    /// baseline, but nothing proves the AES extension.
+    fn sve_only_host() -> impl Fn(Backend) -> bool {
+        |b: Backend| matches!(b, Backend::Sve | Backend::Neon | Backend::Scalar)
+    }
+
     #[test]
     fn detect_picks_strongest_supported_summoning() {
         assert_eq!(detect(&[Backend::V2, Backend::V1], x86_host()), Backend::V2);
@@ -244,6 +277,11 @@ mod tests {
             Backend::Scalar
         );
         assert_eq!(detect(&[Backend::Scalar], x86_host()), Backend::Scalar);
+        // ARM tiers, scalable or not, never summon on an x86 host.
+        assert_eq!(
+            detect(&[Backend::Sve2Aes, Backend::Sve, Backend::Neon], x86_host()),
+            Backend::Scalar
+        );
     }
 
     #[test]
@@ -409,6 +447,157 @@ mod tests {
         );
     }
 
+    #[test]
+    fn sve_detection_picks_the_strongest_scalable_tier_present() {
+        const SET: &[Backend] = &[
+            Backend::Sve2Aes,
+            Backend::Sve2,
+            Backend::Sve,
+            Backend::NeonAes,
+            Backend::Neon,
+            Backend::Scalar,
+        ];
+        assert_eq!(detect(SET, sve2_aes_host()), Backend::Sve2Aes);
+        assert_eq!(detect(SET, sve2_host_without_aes()), Backend::Sve2);
+        assert_eq!(detect(SET, sve_only_host()), Backend::Sve);
+    }
+
+    #[test]
+    fn sve_narrowing_omits_host_best_resolves_lower() {
+        // An SVE2-AES host whose consumer ships no SVE2-AES kernel degrades
+        // to SVE2, then to SVE, then to the NEON baseline.
+        const WITH_AES: &[Backend] = &[Backend::Sve2, Backend::Sve, Backend::Neon, Backend::Scalar];
+        assert_eq!(detect(WITH_AES, sve2_aes_host()), Backend::Sve2);
+        const BASE_SVE2: &[Backend] = &[Backend::Sve, Backend::Neon, Backend::Scalar];
+        assert_eq!(detect(BASE_SVE2, sve2_aes_host()), Backend::Sve);
+        const NEON_ONLY: &[Backend] = &[Backend::Neon, Backend::Scalar];
+        assert_eq!(detect(NEON_ONLY, sve2_aes_host()), Backend::Neon);
+    }
+
+    #[test]
+    fn sve_override_within_family_downgrades() {
+        const SET: &[Backend] = &[
+            Backend::Sve2Aes,
+            Backend::Sve2,
+            Backend::Sve,
+            Backend::Neon,
+            Backend::Scalar,
+        ];
+        let detected = detect(SET, sve2_aes_host());
+        assert_eq!(detected, Backend::Sve2Aes);
+        assert_eq!(
+            apply_override(SET, detected, Some(Backend::Sve2), sve2_aes_host()),
+            Backend::Sve2
+        );
+        assert_eq!(
+            apply_override(SET, detected, Some(Backend::Sve), sve2_aes_host()),
+            Backend::Sve
+        );
+        assert_eq!(
+            apply_override(SET, detected, Some(Backend::Neon), sve2_aes_host()),
+            Backend::Neon
+        );
+        assert_eq!(
+            apply_override(SET, detected, Some(Backend::Scalar), sve2_aes_host()),
+            Backend::Scalar
+        );
+        // Same-strength request is a no-op downgrade.
+        assert_eq!(
+            apply_override(SET, detected, Some(Backend::Sve2Aes), sve2_aes_host()),
+            Backend::Sve2Aes
+        );
+    }
+
+    #[test]
+    fn sve_override_to_absent_extension_is_refused() {
+        // Base SVE2 without the optional AES extension: the extension does
+        // not summon, so the request is ignored rather than resolving a
+        // backend that would SIGILL the CPU.
+        const SET: &[Backend] = &[
+            Backend::Sve2Aes,
+            Backend::Sve2,
+            Backend::Sve,
+            Backend::NeonAes,
+            Backend::Neon,
+            Backend::Scalar,
+        ];
+        let detected = detect(SET, sve2_host_without_aes());
+        assert_eq!(detected, Backend::Sve2);
+        assert_eq!(
+            apply_override(
+                SET,
+                detected,
+                Some(Backend::Sve2Aes),
+                sve2_host_without_aes()
+            ),
+            Backend::Sve2
+        );
+        // SVE-only host: neither SVE2 nor the NEON AES extension summons, so
+        // an upgrade to SVE2 or downgrade to NEON AES is refused.
+        let base = detect(SET, sve_only_host());
+        assert_eq!(base, Backend::Sve);
+        assert_eq!(
+            apply_override(SET, base, Some(Backend::Sve2), sve_only_host()),
+            Backend::Sve
+        );
+        assert_eq!(
+            apply_override(SET, base, Some(Backend::NeonAes), sve_only_host()),
+            Backend::Sve
+        );
+    }
+
+    #[test]
+    fn sve_upgrade_request_is_ignored() {
+        const SET: &[Backend] = &[
+            Backend::Sve2Aes,
+            Backend::Sve2,
+            Backend::Sve,
+            Backend::Scalar,
+        ];
+        // Even with a positive probe, the downgrade-only guard refuses a
+        // tier stronger than the detected value.
+        assert_eq!(
+            apply_override(SET, Backend::Sve2, Some(Backend::Sve2Aes), sve2_aes_host()),
+            Backend::Sve2
+        );
+        assert_eq!(
+            apply_override(SET, Backend::Sve, Some(Backend::Sve2), sve2_aes_host()),
+            Backend::Sve
+        );
+    }
+
+    #[test]
+    fn sve_cross_family_override_is_refused() {
+        const SET: &[Backend] = &[
+            Backend::V3,
+            Backend::Sve2Aes,
+            Backend::Sve2,
+            Backend::Sve,
+            Backend::NeonAes,
+            Backend::Scalar,
+        ];
+        // An x86 tier never summons on an SVE host: the arch-rooted probe
+        // refuses the request even though V3 sorts stronger than every SVE
+        // tier.
+        let arm = detect(SET, sve2_aes_host());
+        assert_eq!(arm, Backend::Sve2Aes);
+        assert_eq!(
+            apply_override(SET, arm, Some(Backend::V3), sve2_aes_host()),
+            Backend::Sve2Aes
+        );
+        // And the reverse: the SVE tiers never summon on an x86 host, even
+        // though they sort weaker than V3.
+        let x86 = detect(SET, x86_host());
+        assert_eq!(x86, Backend::V3);
+        assert_eq!(
+            apply_override(SET, x86, Some(Backend::Sve2Aes), x86_host()),
+            Backend::V3
+        );
+        assert_eq!(
+            apply_override(SET, x86, Some(Backend::Sve), x86_host()),
+            Backend::V3
+        );
+    }
     #[test]
     fn override_not_in_supported_is_ignored() {
         const SET: &[Backend] = &[Backend::V3, Backend::V1, Backend::Scalar];
