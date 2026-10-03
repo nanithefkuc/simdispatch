@@ -27,9 +27,12 @@ this crate is written here.
   configuration only. Ladder behaviour (narrowing, the downgrade-only
   override, cross-family refusal, and the real `SIMD_BACKEND` environment case)
   is asserted inside the tests themselves.
-- **`MIRI` is empty**, which is ground rule 4 restated: `#![deny(unsafe_code)]`
-  leaves nothing for miri to check, and `just unsafe-check` reports that and
-  skips. That is not a gap to fill.
+- **`MIRI` is empty.** Ground rule 4 holds for the default build, and the
+  `sve` residue below is Miri-dead: the nightly-gated SVE surface compiles
+  only on little-endian aarch64 under an eligible nightly, a configuration
+  Miri's interpreter does not carry (no `stdarch_aarch64_sve` support), so
+  `just unsafe-check` reports and skips. That is a configuration boundary,
+  not a gap to fill.
 - **No bench targets.** There is no `benches/`; capability ordering is
   canonical rather than measured, so `just bench` and `just perf-bench` have
   nothing to run. `COV_IGNORE` is empty — every line counts toward the 95%
@@ -37,6 +40,38 @@ this crate is written here.
 - `justfile` is a byte-identical vendored copy and is never edited here; the
   umbrella's `just drift` check fails on a modified copy. Crate-specific values
   and any recipe unique to `simdispatch` belong in `crate.just`.
+- **`just sve-check` verifies the SVE surface by codegen.** A `lib` example
+  (`examples/sve_intrinsics.rs`, gated on `sve`) name-guards the raw
+  `core::arch::aarch64` re-export and exercises the SVE2 EOR3/PMUL/TBL2 and
+  SVE2-AES PMULLB/PMULLT-pair intrinsics through the exact token boundaries.
+  The recipe builds it for `aarch64-unknown-linux-gnu` on the pinned
+  `nightly-2026-09-28` (release, so real codegen), then runs clippy and
+  rustdoc over the same target, then a host all-features check proving the
+  example stays inert where `build.rs` declines the surface. The canary cfg
+   `sve_canary_required` is declared by `build.rs` and armed only in that
+   recipe's cross-build `RUSTFLAGS`: the example carries a `compile_error!` when the
+  cfg is armed but `simdispatch_sve` is absent, so a vacuous pass (wrong
+  toolchain, wrong target, surface silently not compiled) is impossible. It
+   is compile verification, not a runtime proof — no SVE host is involved.
+- **`just sve-runtime` executes the intrinsic verifier under QEMU.** It
+  requires `qemu-aarch64`, `aarch64-linux-gnu-gcc`, an AArch64 glibc sysroot,
+  `jq`, `timeout`, and the pinned nightly target. Optional positional
+  arguments override the QEMU executable, sysroot, and linker. The recipe
+  builds `tests/sve_runtime.rs` once at baseline AArch64, then asserts actual
+  token availability, backend resolution, and vector width in separate
+  processes at VL 128/256/512. Direct intrinsic comparisons exercise tails,
+  whole-vector table geometry, bounded small-table loads, and paired
+  carryless-product layout; sentinel guards detect out-of-payload stores.
+  Forced `sve2`/`sve` runs assert the real override result. `neoverse-v1`
+  and `max,sve=off` assert absent capabilities and upgrade refusal. An
+  isolated SVE2-without-AES configuration is not part of this recipe.
+  Missing tools, absent required surface, expectation mismatches, and
+  timeouts fail; no runtime case passes through a skip.
+  CI runs this recipe on `ubuntu-24.04` with distro `qemu-user`,
+  `gcc-aarch64-linux-gnu`, `libc6-dev-arm64-cross`, and `jq`, records the
+  installed tool versions, and uses the pinned nightly AArch64 target.
+  The job supplies correctness evidence only, including wider-VL execution;
+  no timing result is a benchmark under B7.
 
 ## Ground rules (do not break)
 
@@ -58,8 +93,16 @@ this crate is written here.
    is undefined behaviour, not a preference. There is exactly one override for
    whole stack; per-crate overrides (`FFF_BACKEND`, `BUTTERFLY_FFT_BACKEND`, …)
    are deleted as crates migrate.
-4. **No kernels, no intrinsics, no `unsafe`.** `#![deny(unsafe_code)]` at the
-   root. This crate composes proofs, it does not compute bytes.
+4. **No kernels, no intrinsics, no `unsafe` — one scoped opt-in exception.**
+   `#![deny(unsafe_code)]` at the root, so every `unsafe` item carries its own
+   `#[allow(unsafe_code)]`. The off-by-default `sve` feature adds the one
+   exception: the SVE/SVE2/SVE2-AES capability tokens in
+   `src/arch/aarch64.rs` and the raw `core::arch::aarch64` re-export, gated
+   by the `simdispatch_sve` cfg that `build.rs` defines only for a
+   little-endian aarch64 target on an eligible nightly. The exception is
+   capability plumbing, not kernels: no `#[target_feature]` compute path
+   ships here, and the residue ledger below enumerates the surviving
+   `unsafe` in full.
 5. **One runtime dependency: `archmage`, pinned exactly from crates.io.** The
    pin is `=0.9.29` — the first release carrying `X64V3GfniCryptoToken`
    (`imazen/archmage#66`, merged upstream). No floating range: tier ordering
@@ -106,6 +149,72 @@ this crate is written here.
   otherwise tops out at `v3_gfni_crypto`.
 - **`lane_bytes()` is architectural and lives here.** 64/32/16/8 per tier;
   consumers deriving buffer geometry from a backend import it, never re-derive.
+- **The scalable tiers are local rows.** `sve2_aes` / `sve2` / `sve` bind the
+  tokens in `simdispatch::arch::aarch64` (behind the off-default `sve`
+  feature), not registry tokens; their priorities are local until `archmage`
+  lands SVE tiers, and the ordering canary marks them as such.
+
+## Unsafe residue ledger
+
+The default build is `#![deny(unsafe_code)]` with zero exceptions. The
+off-by-default `sve` feature carries exactly two `unsafe` items, both in
+`src/arch/aarch64.rs`:
+
+1. `svcntb_sve(_proof: SveToken)` — the per-item
+   `#[allow(unsafe_code)]` wrapper entering the `#[target_feature(enable =
+   "sve")]` sibling. Residue class 2 of the umbrella's kernel-residue
+   enumeration (K5): the `SveToken` parameter in the signature is the
+   SINCE–THUS proof carried in place above the item, so a caller cannot
+   reach the sibling without a proof `summon` minted.
+2. the nested `unsafe fn svcntb_enabled()` inside it — the single `CNTB`
+   query, the only way to read the thread's current SVE vector length; no
+   safe wrapper for it exists on this toolchain floor.
+
+Nothing else in this crate, feature on or off, contains `unsafe`. A new
+`unsafe` item requires a ledger entry here and a SINCE–THUS proof at the
+item (P12).
+
+The compile-verification example `examples/sve_intrinsics.rs` is a separate
+`lib` crate with its own `#![deny(unsafe_code)]` root and exactly two
+`unsafe` items, both per-item `#[allow(unsafe_code)]` with SINCE–THUS proofs
+in place; they exist only where `simdispatch_sve` is defined and are
+exercised by `just sve-check`, never shipped as kernels:
+
+3. `sve2_eor3_pmul_tbl2(_proof: Sve2Token, ..)` — the `#[target_feature(enable
+   = "sve,sve2")]` frame calling `sveor3_u8`, `svpmul_u8`, `svtbl2_u8` and
+   the guarded `svld1_u8`/`svst1_u8` blocks; residue class 2 (K5): the token
+   parameter is the proof, and each load/store predicate is
+   `svwhilelt_b8_u64(0, 32)` over a `[u8; 32]` buffer, so active lanes stay
+   inside the array.
+4. `sve2_aes_pmull_pair(_proof: Sve2AesToken, ..)` — the
+   `#[target_feature(enable = "sve,sve2,sve2-aes")]` frame calling
+   `svpmullb_pair_u8` / `svpmullt_pair_u8` with the same token-proof and
+   `svwhilelt_b8_u64(0, 16)`-bounded load/store structure.
+
+The runtime integration test `tests/sve_runtime.rs` is a separate crate
+with its own `#![deny(unsafe_code)]` root. Its seven safe wrappers and
+seven nested target-feature siblings each have a per-item exception and
+SINCE–THUS proof. They compile only under `simdispatch_sve` and are test
+operations, never shipped kernels:
+
+5. `xor_assign_sve` and its `body`: `SveToken` proves the SVE entry;
+   equal-length slices and `whilelt` bound every byte load and store.
+6. `tbl_full_sve` and its `body`: `SveToken` proves entry; the table spans
+   the calling thread's complete VL, while indices and stores are bounded
+   by their equal-length slices.
+7. `replicate_table_sve` and its `body`: `SveToken` proves entry;
+   `svld1rq_u8` reads the referenced 16-byte table and replicates it, while
+   `whilelt` bounds output stores.
+8. `eor3_sve2` and its `body`: `Sve2Token` proves SVE/SVE2 entry;
+   equal-length slices and `whilelt` bound the three inputs and output.
+9. `pmul_sve2` and its `body`: `Sve2Token` proves SVE/SVE2 entry;
+   equal-length slices and `whilelt` bound byte-polynomial-product access.
+10. `tbl2_sve2` and its `body`: `Sve2Token` proves SVE/SVE2 entry; both
+    tables span the complete VL, with predicated index loads and stores.
+11. `pmull_pair_sve2aes` and its `body`: `Sve2AesToken` proves entry to
+    SVE/SVE2/SVE2-AES. Typed `u64` slices have equal, even lane counts;
+    the even `svcntd` stride preserves pair boundaries and `whilelt`
+    bounds loads and stores, including partial-vector tails.
 
 ## Numbers
 
@@ -113,6 +222,14 @@ Capability ordering is canonical (from `archmage`), not measured, so
 `BENCHMARKS.md`-style records are not expected here. But any *policy* number
 (this crate has none of consequence today) follows the umbrella rule: carried
 in `BENCHMARKS.md`-style docs, never in doc comments.
+
+The umbrella's **B7 SVE2 development contract** governs consumers of the
+scalable tiers: 128-bit VL is the sole optimization target, and QEMU CI
+provides correctness evidence at VL 128/256/512. Wider-VL execution evidence
+comes only from QEMU. SVE2/SVE2-AES performance numbers and speedup claims
+are prohibited until the hardware restriction is explicitly lifted under
+B7. Capability ordering is not a throughput ranking, and width-dependent
+memory safety remains required at every supported live VL.
 
 ## Working here
 
