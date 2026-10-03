@@ -165,6 +165,10 @@ positional arguments override the QEMU executable, sysroot, and linker.
 The runner also checks real downgrade overrides and SVE-only/no-SVE
 configurations. Isolated SVE2-without-AES coverage remains outside this
 runtime matrix. Missing prerequisites or mismatched expectations fail.
+CI runs the same matrix on Ubuntu 24.04, installs the cross-toolchain and
+QEMU packages explicitly, and records their versions. These emulated runs
+provide correctness evidence, including larger vector lengths, without
+performance measurements.
 
 `simdispatch` builds on stable Rust (edition 2024, MSRV 1.89) with no extra
 tooling or target-feature flags — the backend is selected at runtime. The

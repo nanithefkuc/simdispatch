@@ -57,3 +57,29 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: extractions/setup-just@v2
       - run: just sve-check
+
+  sve-runtime:
+    name: QEMU SVE runtime correctness (VL 128/256/512)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly-2026-09-28
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - name: Install QEMU and AArch64 cross-toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            qemu-user gcc-aarch64-linux-gnu libc6-dev-arm64-cross jq
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: sve-runtime-ubuntu-24.04
+      - uses: extractions/setup-just@v2
+      - name: Report emulator and cross-toolchain versions
+        run: |
+          qemu-aarch64 --version
+          aarch64-linux-gnu-gcc --version
+          dpkg-query --show qemu-user gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+      - name: Execute intrinsic and backend correctness matrix
+        run: just sve-runtime qemu-aarch64 /usr/aarch64-linux-gnu aarch64-linux-gnu-gcc

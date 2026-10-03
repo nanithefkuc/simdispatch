@@ -14,6 +14,9 @@ All notable changes to this project are documented here. The format follows
 
 - CI runs the crate validation gate, checks the minimum supported Rust
   toolchain, and exercises the scalar environment override on a hosted runner.
+- QEMU runtime CI executes the SVE/SVE2/SVE2-AES correctness matrix at
+  VL 128/256/512, including real downgrade overrides and capability-negative
+  configurations, with an explicitly provisioned AArch64 cross-toolchain.
 - **`sve` feature (off by default):** the AArch64 scalable-vector capability
   surface — `Backend::Sve2Aes` / `Sve2` / `Sve` (override names `sve2_aes`,
   `sve2`, `sve`) ordered between the x86 and NEON ladders, the zero-sized

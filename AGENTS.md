@@ -67,6 +67,11 @@ this crate is written here.
   isolated SVE2-without-AES configuration is not part of this recipe.
   Missing tools, absent required surface, expectation mismatches, and
   timeouts fail; no runtime case passes through a skip.
+  CI runs this recipe on `ubuntu-24.04` with distro `qemu-user`,
+  `gcc-aarch64-linux-gnu`, `libc6-dev-arm64-cross`, and `jq`, records the
+  installed tool versions, and uses the pinned nightly AArch64 target.
+  The job supplies correctness evidence only, including wider-VL execution;
+  no timing result is a benchmark under B7.
 
 ## Ground rules (do not break)
 
@@ -217,6 +222,14 @@ Capability ordering is canonical (from `archmage`), not measured, so
 `BENCHMARKS.md`-style records are not expected here. But any *policy* number
 (this crate has none of consequence today) follows the umbrella rule: carried
 in `BENCHMARKS.md`-style docs, never in doc comments.
+
+The umbrella's **B7 SVE2 development contract** governs consumers of the
+scalable tiers: 128-bit VL is the sole optimization target, and QEMU CI
+provides correctness evidence at VL 128/256/512. Wider-VL execution evidence
+comes only from QEMU. SVE2/SVE2-AES performance numbers and speedup claims
+are prohibited until the hardware restriction is explicitly lifted under
+B7. Capability ordering is not a throughput ranking, and width-dependent
+memory safety remains required at every supported live VL.
 
 ## Working here
 
