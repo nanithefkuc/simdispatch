@@ -44,9 +44,11 @@
 //! ## `no_std`
 //!
 //! The crate is `#![no_std]`. Without the `std` feature there is no
-//! environment and no runtime detection, so [`backend()`] and any
-//! [`Selection::resolve`] report [`Backend::Scalar`] unconditionally —
-//! matching how the field kernels behave on a std-less build.
+//! environment and resolution performs no runtime detection, so
+//! [`backend()`] and any [`Selection::resolve`] report [`Backend::Scalar`]
+//! unconditionally — matching how the field kernels behave on a std-less
+//! build. `archmage` keeps its default `std` feature, so the target still
+//! needs the standard library, and the `sve` tokens still probe through it.
 //!
 //! ## Non-scope
 //!
@@ -137,12 +139,13 @@ mod tests {
         assert_eq!(selected, Backend::Scalar);
     }
 
-    #[cfg(all(feature = "std", target_arch = "x86_64"))]
+    #[cfg(all(feature = "std", target_arch = "x86_64", target_feature = "sse2"))]
     #[test]
     fn x86_full_ladder_floor_is_v1_without_a_scalar_override() {
-        // V1 (SSE2) always summons on x86_64, so the resolved full ladder must
-        // be an x86 tier — unless `SIMD_BACKEND=scalar` forced the whole
-        // process to portable code, which is exactly the override's job.
+        // V1 (SSE2) always summons on SSE2 x86_64, so the resolved full
+        // ladder must be an x86 tier — unless `SIMD_BACKEND=scalar` forced
+        // the whole process to portable code, which is exactly the
+        // override's job.
         let backend = backend();
         if std::env::var("SIMD_BACKEND")
             .ok()

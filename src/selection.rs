@@ -623,10 +623,10 @@ mod tests {
     // Detection is override-independent: these assert host-floor invariants
     // that hold on the real platform regardless of any `SIMD_BACKEND`.
     #[test]
-    #[cfg(all(feature = "std", target_arch = "x86_64"))]
+    #[cfg(all(feature = "std", target_arch = "x86_64", target_feature = "sse2"))]
     fn x86_detection_floor_is_v1() {
-        // V1 (SSE2) is the x86_64 baseline and always summons, so detection
-        // over the full ladder never falls below an x86 tier.
+        // V1 (SSE2) is the hosted x86_64 baseline and always summons there,
+        // so detection over the full ladder never falls below an x86 tier.
         let detected = detect(Backend::ALL, Backend::probes_on_host);
         assert!(
             matches!(
@@ -645,9 +645,15 @@ mod tests {
     #[test]
     #[cfg(all(feature = "std", target_arch = "aarch64"))]
     fn aarch64_detection_floor_is_neon() {
+        // NEON is the AArch64 baseline, so detection never falls below it;
+        // where the SVE surface is compiled, an SVE host detects a scalable
+        // tier above it.
         let detected = detect(Backend::ALL, Backend::probes_on_host);
         assert!(
-            matches!(detected, Backend::NeonAes | Backend::Neon),
+            matches!(
+                detected,
+                Backend::Sve2Aes | Backend::Sve2 | Backend::Sve | Backend::NeonAes | Backend::Neon
+            ),
             "detected {detected:?} on aarch64"
         );
     }

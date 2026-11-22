@@ -8,7 +8,10 @@
 //! variable fails the run, an unavailable required capability fails the run,
 //! and a skipped configuration cannot pass. Where the compiled surface is
 //! absent (non-AArch64 hosts, stable toolchains, builds where `build.rs`
-//! declines the gate) this file compiles to nothing.
+//! declines the gate) this file compiles to nothing. Ordinary test runs lack
+//! that environment, so the verifier is `#[ignore]`d there; the recipe
+//! launches it with `--include-ignored`, after which every missing or
+//! malformed variable still fails the run.
 //!
 //! Each operation drives real intrinsics over guarded buffers whose lengths
 //! straddle the live vector length and compares the result against an
@@ -572,6 +575,7 @@ mod runtime {
     }
 
     #[test]
+    #[ignore = "requires the SVE_TEST_* contract; launched by `just sve-runtime`"]
     fn sve_runtime_verifier() {
         let c = case();
         println!("case: {}", c.label);

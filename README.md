@@ -42,20 +42,19 @@ let chosen = Selection::new("SIMD_BACKEND").supports(KERNELS).resolve();
 
 The MSRV is Rust 1.89.
 
-`simdispatch` is distributed through git only; it is not published to
-[crates.io](https://crates.io).
+`simdispatch` is published on [crates.io](https://crates.io/crates/simdispatch):
 
-```toml
-[dependencies]
-simdispatch = { git = "https://github.com/nanithefkuc/simdispatch" }
+```sh
+cargo add simdispatch
 ```
 
-Portable `no_std` builds drop runtime detection and report
-`Backend::Scalar` unconditionally:
+Without the `std` feature, selection drops runtime detection and the
+`SIMD_BACKEND` override and reports `Backend::Scalar` unconditionally. The
+crate is `#![no_std]`, but `archmage` keeps its default `std` feature, so the
+target still needs the standard library:
 
-```toml
-[dependencies]
-simdispatch = { git = "https://github.com/nanithefkuc/simdispatch", default-features = false }
+```sh
+cargo add simdispatch --no-default-features
 ```
 
 ### Features
@@ -65,7 +64,7 @@ simdispatch = { git = "https://github.com/nanithefkuc/simdispatch", default-feat
 | `std` (default) | runtime detection (`summon()`), the `SIMD_BACKEND` override, and process-wide `backend()` |
 | `avx512` | enables `archmage/avx512` and V4/V4x detection on capable x86 hosts |
 | `sve` | off-default AArch64 SVE/SVE2/SVE2-AES capability surface; nightly-only, see [SVE](#sve) |
-| `--no-default-features` | `#![no_std]`, reports `Backend::Scalar` unconditionally, never probes |
+| `--no-default-features` | `#![no_std]`, reports `Backend::Scalar` unconditionally; resolution never probes (the `sve` tokens probe independently, see [SVE](#sve)) |
 | `internals` | unstable selection internals for benchmarking and downstream experiments; no compatibility promise |
 
 ## Backends
@@ -142,6 +141,11 @@ bitperm extensions nor NEON AES. The module also re-exports the raw
 `core::arch::aarch64` intrinsic surface; naming any unstable item from it
 requires the consumer's own crate-root feature gate.
 
+The tokens probe through `archmage`'s own runtime detection, which this
+crate's `std` feature does not gate: a `--no-default-features --features sve`
+build still detects SVE through the tokens and `lane_bytes_on_host()`, while
+`Selection::resolve` and `backend()` keep reporting `Backend::Scalar`.
+
 The scalable widths are two different answers. `lane_bytes()` is constant and
 reports the architectural minimum (16 bytes), which is insufficient for
 full-vector buffer allocation or loop strides when the live width is larger.
@@ -177,20 +181,19 @@ eligible nightly (see [SVE](#sve)); everywhere else it is inert.
 
 ```sh
 cargo build                        # default: std detection
-cargo build --no-default-features  # portable no_std, always Scalar
+cargo build --no-default-features  # scalar selection; target still needs std
 cargo test --all-features
 ```
 
 ## Dependency
 
 `simdispatch` depends on [`archmage`](https://github.com/imazen/archmage) for
-its capability tokens. Pinned exactly to the crates.io release carrying
-`X64V3GfniCryptoToken` — AVX2 + GFNI without AVX-512
-([`imazen/archmage#66`](https://github.com/imazen/archmage/pull/66), merged
-upstream):
+its capability tokens, pinned exactly to one crates.io release. Cargo admits
+one `archmage` 0.9.x per build, so a crate depending on both `simdispatch`
+and `archmage` pins the same release:
 
 ```toml
-archmage = "=0.9.29"
+archmage = "=0.9.33"
 ```
 
 ## License

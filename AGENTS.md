@@ -12,8 +12,7 @@ detection and ordering.
 this host?** It takes `archmage` capability tokens, adds a canonical backend
 naming/ordering layer, a per-crate supported-set cap, and the downgrade-only
 `SIMD_BACKEND` environment override, and produces a resolved `Backend` value.
-Consumers keep every kernel (`#[target_feature]` today, `#[arcane]` after the
-archmage adoption); this crate never touches kernel bodies.
+Consumers keep every kernel; this crate never touches kernel bodies.
 
 ## Tooling
 
@@ -65,8 +64,11 @@ this crate is written here.
   Forced `sve2`/`sve` runs assert the real override result. `neoverse-v1`
   and `max,sve=off` assert absent capabilities and upgrade refusal. An
   isolated SVE2-without-AES configuration is not part of this recipe.
-  Missing tools, absent required surface, expectation mismatches, and
-  timeouts fail; no runtime case passes through a skip.
+  The verifier is `#[ignore]`d in ordinary test runs, which lack the
+  `SVE_TEST_*` contract, and the recipe launches it with
+  `--include-ignored`. Missing tools, absent required surface, missing or
+  malformed contract variables, expectation mismatches, and timeouts fail;
+  no runtime case passes through a skip.
   CI runs this recipe on `ubuntu-24.04` with distro `qemu-user`,
   `gcc-aarch64-linux-gnu`, `libc6-dev-arm64-cross`, and `jq`, records the
   installed tool versions, and uses the pinned nightly AArch64 target.
@@ -77,8 +79,9 @@ this crate is written here.
 
 1. **`archmage`'s ordering is our ordering.** `Backend` variant order
    reproduces `archmage`'s tier dispatch priorities exactly
-   (`archmage-macros/src/tiers.rs`, backed by `token-registry.toml`).
-   Reordering a variant, or choosing a priority that contradicts `tiers.rs`,
+   (`dispatch_priority` in `archmage`'s `token-registry.toml`, generated into
+   `archmage-macros/src/generated/dispatch.rs`). Reordering a variant, or
+   choosing a priority that contradicts the registry,
    is a behavioral and safety change. A new backend appears at its archmage
    priority position — never appended to the end as a shortcut.
 2. **Detection is single-source: `summon()`.** The only host probe in the
@@ -104,8 +107,8 @@ this crate is written here.
    ships here, and the residue ledger below enumerates the surviving
    `unsafe` in full.
 5. **One runtime dependency: `archmage`, pinned exactly from crates.io.** The
-   pin is `=0.9.29` — the first release carrying `X64V3GfniCryptoToken`
-   (`imazen/archmage#66`, merged upstream). No floating range: tier ordering
+   pin is `=0.9.33`, and every consumer pins the same release: Cargo admits
+   one `archmage` 0.9.x per build. No floating range: tier ordering
    feeds the downgrade check, so a bump is a deliberate re-pin that re-runs
    the ordering test. No other runtime dependency may be added without the
    umbrella exception process.
@@ -115,7 +118,7 @@ this crate is written here.
 
 ## Testing
 
-- Tests: ordering pinned to the `archmage` `tiers.rs` mirror, narrowing
+- Tests: ordering pinned to the `archmage` dispatch-priority mirror, narrowing
   (including the butterfly-fft regression), downgrade-only override,
   cross-family refusal, host-floor invariants (cfg-gated), and the real
   environment `SIMD_BACKEND` override test.
@@ -137,7 +140,8 @@ this crate is written here.
   pair lets an override "upgrade" to a weaker backend mislabeled stronger —
   the check then refuses a legitimate downgrade or, worse, accepts an
   incapable one. A test asserts variant order against a table mirroring
-  `tiers.rs`; it must be updated on every `archmage` rev bump.
+  the registry's dispatch priorities; it must be updated on every `archmage`
+  bump.
 - **A backend carries its proof.** Each `Backend` variant binds the `archmage`
   token that proves it; `summon()` succeeding for that token is the
   justification a consumer's `#[target_feature]` call is sound. A kernel added

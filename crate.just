@@ -79,7 +79,7 @@ sve-runtime QEMU="qemu-aarch64" SYSROOT="/usr/aarch64-linux-gnu" LINKER="aarch64
             "SVE_TEST_SVE=$s" "SVE_TEST_SVE2=$s2" "SVE_TEST_SVE2_AES=$s2a" \
             "SVE_TEST_BACKEND=$backend" "SVE_TEST_OPS=$ops" \
             timeout 120 '{{QEMU}}' -L '{{SYSROOT}}' \
-            -cpu "$cpu" "$EXE" --test-threads=1 --nocapture
+            -cpu "$cpu" "$EXE" --include-ignored --test-threads=1 --nocapture
     }
 
     for vq in 1 2 4; do
