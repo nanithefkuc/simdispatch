@@ -31,11 +31,11 @@ sve = []
 internals = []
 
 [dependencies]
-# Released upstream: 0.9.29 carries X64V3GfniCryptoToken — AVX2 + GFNI
-# without AVX-512 — the token this crate's degrade ladder sits on. Pinned
-# exactly: tier ordering feeds the downgrade check, so a floating range must
-# not silently move the ladder under a rebuild.
-archmage = "=0.9.29"
+# Pinned exactly: tier ordering feeds the downgrade check, so a floating range
+# must not silently move the ladder under a rebuild. Cargo admits one
+# archmage 0.9.x per build, so a consumer that also depends on archmage pins
+# this same release.
+archmage = "=0.9.33"
 
 [[example]]
 name = "sve_intrinsics"

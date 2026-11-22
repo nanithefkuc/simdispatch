@@ -30,12 +30,29 @@ All notable changes to this project are documented here. The format follows
   visible build warning and the three names never summon. **Breaking:**
   adding the tiers to `Backend::ALL` changes full-ladder resolution on SVE
   hosts built with the feature — consumers dispatch on
-  `Selection::supports` with their implemented tiers.
+  `Selection::supports` with their implemented tiers. The tokens probe
+  through `archmage`'s runtime detection whether or not the `std` feature is
+  enabled; without `std`, resolution still reports `Backend::Scalar`.
 - `Backend::lane_bytes_on_host()`: the tier's width on the current host and
   thread. Fixed-width tiers equal `lane_bytes()`; the scalable tiers report
   the thread's current SVE vector length after a proof summons (the
   architectural minimum otherwise), where the const `lane_bytes()` stays the
   16-byte minimum.
+
+### Changed
+
+- `archmage` is pinned at `=0.9.33`. Crates depending on both `simdispatch`
+  and `archmage` move to the same release, since Cargo admits one `archmage`
+  0.9.x per build.
+- The README states that `simdispatch` is published on crates.io, and that
+  builds without `std` still need the standard library for `archmage`.
+- The SVE runtime verifier is ignored in ordinary test runs and launched by
+  `just sve-runtime`; CI installs `cargo-nextest` for the coverage recipe.
+
+### Fixed
+
+- The AArch64 detection-floor test accepts the scalable tiers, so
+  `cargo test --all-features` passes on SVE hosts with the `sve` surface.
 
 ## [0.2.0] — 2026-09-28
 

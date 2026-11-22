@@ -22,10 +22,11 @@ const SVE_MIN_LANE_BYTES: usize = 16;
 ///
 /// Variants are named after the [`archmage`](https://github.com/imazen/archmage)
 /// tier they prove and declared in that tier's dispatch-priority order
-/// (strongest first), mirroring `archmage-macros/src/tiers.rs` at the pinned
-/// rev. The declaration order therefore *is* the ladder: it carries
-/// capability, and it cannot drift from `archmage`'s source of truth without
-/// the ordering test failing.
+/// (strongest first), mirroring the `dispatch_priority` values in
+/// `archmage`'s `token-registry.toml` at the pinned release. The declaration
+/// order therefore *is* the ladder: it carries capability. The ordering test
+/// pins it to a hand-maintained mirror of those priorities, reconciled with
+/// `archmage` on every bump; the test does not read upstream itself.
 ///
 /// [`Ord`] follows declaration order with **weaker sorting greater**, matching
 /// `fff`'s convention so the downgrade-only override check ports unchanged:
@@ -49,14 +50,17 @@ pub enum Backend {
     /// Detection requires the `avx512` feature; this token does not prove GFNI.
     V4,
     /// x86 AVX2 + GFNI + crypto, 32-byte GFNI field multiply
-    /// (`X64V3GfniCryptoToken`, `tiers.rs` priority 37).
+    /// (`X64V3GfniCryptoToken`, priority 37).
     V3GfniCrypto,
     /// x86 AVX2, 32-byte split-nibble shuffle (`X64V3Token`, priority 30).
     V3,
     /// x86 SSE4.2, 16-byte split-nibble shuffle (`X64V2Token`, priority 20).
     V2,
-    /// x86 SSE2 baseline (`X64V1Token`, priority 10). Always summons on
-    /// x86_64; the x86 floor below which only `Scalar` remains.
+    /// x86 SSE2 baseline (`X64V1Token`, priority 10). Summons on every x86_64
+    /// target that enables SSE2, which every hosted x86_64 target does;
+    /// soft-float targets such as `x86_64-unknown-uefi` carry `archmage` stub
+    /// tokens that never summon. The x86 floor below which only `Scalar`
+    /// remains.
     V1,
     /// AArch64 SVE2 with the AES extension: the scalable PMULL128 tier
     /// (`Sve2AesToken`, local priority 48). Detection requires the `sve`
@@ -174,11 +178,12 @@ impl Backend {
     /// scalable AArch64 tiers report the calling thread's current SVE
     /// vector length — a multiple of the 16-byte architectural minimum that
     /// may be larger — but only after an SVE proof summons; without one
-    /// (builds without the compiled surface, non-AArch64 hosts, SVE-less
-    /// hosts, or `no_std` builds without detection) they report that
-    /// minimum rather than executing SVE. Vector length is per-thread
-    /// state: callers hold no expectation that two queries or two threads
-    /// agree, and must not cache the value in process-wide state.
+    /// (builds without the compiled surface, non-AArch64 hosts, or SVE-less
+    /// hosts) they report that minimum rather than executing SVE. The proof
+    /// comes from `archmage`'s runtime probe, which this crate's `std`
+    /// feature does not gate. Vector length is per-thread state: callers
+    /// hold no expectation that two queries or two threads agree, and must
+    /// not cache the value in process-wide state.
     #[must_use]
     pub fn lane_bytes_on_host(self) -> usize {
         match self {
@@ -270,18 +275,21 @@ impl FromStr for Backend {
 mod tests {
     use super::*;
 
-    /// Mirrors the `archmage` tier priorities at the pinned rev
-    /// (`archmage-macros/src/tiers.rs`). This table is the ordering canary:
-    /// it must be regenerated on every `archmage` rev bump, and the ladder
-    /// must be reconciled with upstream rather than reordered locally.
-    const TIERS_RS_MIRROR: &[(Backend, u32)] = &[
+    /// Mirrors the `archmage` dispatch priorities at the pinned release
+    /// (`dispatch_priority` in `token-registry.toml`, generated into
+    /// `archmage-macros/src/generated/dispatch.rs`). This table is the
+    /// ordering canary: the test below checks that `Backend::ALL` follows
+    /// its row order. It does not read `archmage`, so rows and priorities
+    /// are reconciled with upstream by hand on every bump, never reordered
+    /// locally.
+    const ARCHMAGE_PRIORITY_MIRROR: &[(Backend, u32)] = &[
         (Backend::V4x, 50),
         (Backend::V4, 40),
         (Backend::V3GfniCrypto, 37),
         (Backend::V3, 30),
         (Backend::V2, 20),
         (Backend::V1, 10),
-        // Local rows, not `tiers.rs` entries: the registry carries no SVE
+        // Local rows, not registry entries: the registry carries no SVE
         // tokens, so the scalable tiers bind `simdispatch::arch::aarch64`
         // tokens and local dispatch priorities between the x86 and NEON
         // families. An upstream SVE tier lands at its archmage priority and
@@ -296,12 +304,12 @@ mod tests {
     ];
 
     #[test]
-    fn all_pins_variant_order_to_tiers_rs() {
+    fn all_pins_variant_order_to_archmage_priorities() {
         // The mirror and the ladder must line up exactly (same length, same
         // order) or this fails — adding a tier without updating the mirror is
         // a build error of the canary.
         let mut mirrored_order = [Backend::Scalar; 13];
-        for (i, &(backend, _)) in TIERS_RS_MIRROR.iter().enumerate() {
+        for (i, &(backend, _)) in ARCHMAGE_PRIORITY_MIRROR.iter().enumerate() {
             mirrored_order[i] = backend;
         }
         assert_eq!(Backend::ALL, mirrored_order.as_slice());
@@ -427,7 +435,7 @@ mod tests {
     // Double-check compile-time-proof tier summons where the platform forces
     // it. Probing is the std-only runtime path, so these are std-gated too.
     #[test]
-    #[cfg(all(feature = "std", target_arch = "x86_64"))]
+    #[cfg(all(feature = "std", target_arch = "x86_64", target_feature = "sse2"))]
     fn v1_always_summons_on_x86_64() {
         assert!(Backend::V1.probes_on_host());
     }

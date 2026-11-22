@@ -42,10 +42,11 @@ fn simd_backend_override_is_downgrade_only() {
     // Host-true downgrade proof, only on the arch that can assert it
     // deterministically. The `feature = "std"` guard keeps this out of no_std
     // runs, where resolution reports Scalar and no env is read.
-    #[cfg(all(target_arch = "x86_64", feature = "std"))]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2", feature = "std"))]
     {
-        // V1 (SSE2) always summons on x86_64 and is the weakest x86 tier, so
-        // a request for it resolves exactly to V1: a real, honored downgrade.
+        // V1 (SSE2) always summons on SSE2 x86_64 and is the weakest x86
+        // tier, so a request for it resolves exactly to V1: a real, honored
+        // downgrade.
         // SAFETY: single-threaded test process; no concurrent env::var read.
         unsafe { std::env::set_var("SIMD_BACKEND", "v1") };
         assert_eq!(resolve_all(), Backend::V1);
