@@ -95,10 +95,12 @@ unsafe-check:
 
 # ── Lint and docs ─────────────────────────────────────────────────────────────
 
+# Both feature ends plus the default set, which neither end builds.
 [group('lint')]
 lint:
     cargo fmt --all --check
     cargo clippy --all-targets --all-features -- -D warnings
+    cargo clippy --all-targets -- -D warnings
     cargo clippy --all-targets --no-default-features -- -D warnings
 
 [group('lint')]
@@ -156,24 +158,43 @@ cover-html: _cover-runs
     cargo llvm-cov report --html "${ignore[@]}"
     echo "target/llvm-cov/html/index.html"
 
+# Coverage counters are shared by every thread of a process, so threads
+# running the same code contend on them and in-process test parallelism
+# collapses; nextest runs each test in its own process instead. Line counts
+# need unoptimized codegen, since inlining and constant folding drop counted
+# lines, so the runs pin opt-level 0 whatever the test profile sets.
 [private]
 _cover-runs:
     #!/usr/bin/env bash
     set -euo pipefail
+    export CARGO_PROFILE_TEST_OPT_LEVEL=0
+    run=(cargo llvm-cov nextest --no-report --no-tests=warn)
     cargo llvm-cov clean --workspace
-    cargo llvm-cov --no-report --all-features
+    "${run[@]}" --all-features
     for tier in {{TIERS}}; do
         echo "── SIMD_BACKEND=${tier}"
-        SIMD_BACKEND="${tier}" cargo llvm-cov --no-report --all-features
+        SIMD_BACKEND="${tier}" "${run[@]}" --all-features
     done
-    cargo llvm-cov --no-report --no-default-features
+    "${run[@]}" --no-default-features
 
 # ── The pull-request gate ─────────────────────────────────────────────────────
 
 # Everything CI will run. Green here means green there.
+#
+# `cover` already runs the whole suite at both feature ends and once per tier,
+# failing on any test failure, so the gate does not repeat `features` or
+# `test-tiers`; it adds only the runs coverage leaves out.
 [group('gate')]
-validate: lint deps doc features test-tiers unsafe-check cover
+validate: lint deps doc _coverage-gaps unsafe-check cover
     @echo "{{CRATE}}: validated"
+
+# The default feature set, which neither feature end builds, and doctests,
+# which coverage runs do not execute.
+[private]
+_coverage-gaps:
+    cargo test
+    cargo test --doc --no-default-features
+    cargo test --doc --all-features
 
 # ── Benchmarks ────────────────────────────────────────────────────────────────
 
@@ -330,6 +351,7 @@ doctor:
     check "rustfmt"             cargo fmt --version
     check "clippy"              cargo clippy --version
     check "cargo-llvm-cov"      cargo llvm-cov --version
+    check "cargo-nextest"       cargo nextest --version
     check "msrv toolchain {{MSRV}}" rustup run {{MSRV}} cargo --version
     check "jq (perf-bench)"     jq --version
     check "perf (perf-bench)"   perf --version

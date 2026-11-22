@@ -32,35 +32,50 @@
 //! The one stack-wide override, replacing the per-crate `FFF_BACKEND` /
 //! `CAFFT_BACKEND` as crates migrate. Accepted values are
 //! [`Backend::name()`] values (`scalar`, `v1`, `v2`, `v3`, `v3_gfni_crypto`, `v4`, `v4x`,
-//! `neon`, `neon_aes`, `wasm128`). It is **downgrade-only**: a request for a
-//! backend the host cannot run, or one stronger than what detection found, is
-//! ignored. The `v4` and `v4x` tiers are available with the `avx512` feature.
+//! `neon`, `neon_aes`, `wasm128`, `sve2_aes`, `sve2`, `sve`). It is **downgrade-only**: a
+//! request for a backend the host cannot run, or one stronger than what
+//! detection found, is ignored. The `v4` and `v4x` tiers are available with
+//! the `avx512` feature; the `sve2_aes`, `sve2`, and `sve` tiers additionally
+//! need the `sve` feature on an eligible nightly AArch64 build — elsewhere
+//! they stay recognized names that never summon.
 //! `SIMD_BACKEND=scalar` forces the whole stack to portable code —
 //! the escape hatch operators and differential testing need.
 //!
 //! ## `no_std`
 //!
 //! The crate is `#![no_std]`. Without the `std` feature there is no
-//! environment and no runtime detection, so [`backend()`] and any
-//! [`Selection::resolve`] report [`Backend::Scalar`] unconditionally —
-//! matching how the field kernels behave on a std-less build.
+//! environment and resolution performs no runtime detection, so
+//! [`backend()`] and any [`Selection::resolve`] report [`Backend::Scalar`]
+//! unconditionally — matching how the field kernels behave on a std-less
+//! build. `archmage` keeps its default `std` feature, so the target still
+//! needs the standard library, and the `sve` tokens still probe through it.
 //!
 //! ## Non-scope
 //!
-//! No kernels, no intrinsics, no dispatch tables, no `unsafe`. Consumers keep
-//! every `#[target_feature]` function; this crate only answers which of them
-//! is legal to call on the current host.
+//! The default build ships no kernels, no intrinsics, no dispatch tables,
+//! and no `unsafe`; it answers which consumer `#[target_feature]` function
+//! is legal to call and never touches kernel bodies. The off-by-default
+//! `sve` feature is the one scoped exception: on an eligible nightly
+//! AArch64 build it adds the scalable-vector capability tokens and the raw
+//! `core::arch::aarch64` re-export at `simdispatch::arch::aarch64`, with
+//! the `unsafe` residue enumerated in the crate's residue ledger.
 
 #![no_std]
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
+// The single library-feature gate for the SVE intrinsic surface. build.rs
+// defines `simdispatch_sve` only when the `sve` feature meets a
+// little-endian AArch64 target and an eligible nightly compiler, so this
+// attribute never reaches a build that cannot carry it.
+#![cfg_attr(simdispatch_sve, feature(stdarch_aarch64_sve))]
 
 #[cfg(feature = "std")]
 extern crate std;
 
+#[cfg(simdispatch_sve)]
+pub mod arch;
 mod backend;
 mod selection;
-
 pub use backend::{Backend, ParseBackendError};
 pub use selection::Selection;
 
@@ -124,12 +139,13 @@ mod tests {
         assert_eq!(selected, Backend::Scalar);
     }
 
-    #[cfg(all(feature = "std", target_arch = "x86_64"))]
+    #[cfg(all(feature = "std", target_arch = "x86_64", target_feature = "sse2"))]
     #[test]
     fn x86_full_ladder_floor_is_v1_without_a_scalar_override() {
-        // V1 (SSE2) always summons on x86_64, so the resolved full ladder must
-        // be an x86 tier — unless `SIMD_BACKEND=scalar` forced the whole
-        // process to portable code, which is exactly the override's job.
+        // V1 (SSE2) always summons on SSE2 x86_64, so the resolved full
+        // ladder must be an x86 tier — unless `SIMD_BACKEND=scalar` forced
+        // the whole process to portable code, which is exactly the
+        // override's job.
         let backend = backend();
         if std::env::var("SIMD_BACKEND")
             .ok()
@@ -163,7 +179,14 @@ mod tests {
             assert_eq!(backend, Backend::Scalar);
         } else {
             assert!(
-                matches!(backend, Backend::NeonAes | Backend::Neon),
+                matches!(
+                    backend,
+                    Backend::Sve2Aes
+                        | Backend::Sve2
+                        | Backend::Sve
+                        | Backend::NeonAes
+                        | Backend::Neon
+                ),
                 "full ladder resolved to {backend:?} on aarch64"
             );
         }

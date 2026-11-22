@@ -8,8 +8,51 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `just sve-runtime`: QEMU execution at multiple vector lengths with
+  direct scalar comparisons for SVE/SVE2/SVE2-AES intrinsics, paired
+  carryless-product layout, and actual capability/override assertions.
+
 - CI runs the crate validation gate, checks the minimum supported Rust
   toolchain, and exercises the scalar environment override on a hosted runner.
+- QEMU runtime CI executes the SVE/SVE2/SVE2-AES correctness matrix at
+  VL 128/256/512, including real downgrade overrides and capability-negative
+  configurations, with an explicitly provisioned AArch64 cross-toolchain.
+- **`sve` feature (off by default):** the AArch64 scalable-vector capability
+  surface — `Backend::Sve2Aes` / `Sve2` / `Sve` (override names `sve2_aes`,
+  `sve2`, `sve`) ordered between the x86 and NEON ladders, the zero-sized
+  proof tokens `simdispatch::arch::aarch64::{SveToken, Sve2Token,
+  Sve2AesToken}` minted through archmage's
+  `is_aarch64_feature_available!`, and the raw `core::arch::aarch64`
+  re-export. The surface compiles only where `build.rs` confirms a
+  little-endian AArch64 target and a nightly at or above the verified floor
+  (release 1.101.0-nightly, commit date 2026-09-27 — the `nightly-2026-09-28`
+  distribution); on stable and everywhere else the feature is inert with a
+  visible build warning and the three names never summon. **Breaking:**
+  adding the tiers to `Backend::ALL` changes full-ladder resolution on SVE
+  hosts built with the feature — consumers dispatch on
+  `Selection::supports` with their implemented tiers. The tokens probe
+  through `archmage`'s runtime detection whether or not the `std` feature is
+  enabled; without `std`, resolution still reports `Backend::Scalar`.
+- `Backend::lane_bytes_on_host()`: the tier's width on the current host and
+  thread. Fixed-width tiers equal `lane_bytes()`; the scalable tiers report
+  the thread's current SVE vector length after a proof summons (the
+  architectural minimum otherwise), where the const `lane_bytes()` stays the
+  16-byte minimum.
+
+### Changed
+
+- `archmage` is pinned at `=0.9.33`. Crates depending on both `simdispatch`
+  and `archmage` move to the same release, since Cargo admits one `archmage`
+  0.9.x per build.
+- The README states that `simdispatch` is published on crates.io, and that
+  builds without `std` still need the standard library for `archmage`.
+- The SVE runtime verifier is ignored in ordinary test runs and launched by
+  `just sve-runtime`; CI installs `cargo-nextest` for the coverage recipe.
+
+### Fixed
+
+- The AArch64 detection-floor test accepts the scalable tiers, so
+  `cargo test --all-features` passes on SVE hosts with the `sve` surface.
 
 ## [0.2.0] — 2026-09-28
 
