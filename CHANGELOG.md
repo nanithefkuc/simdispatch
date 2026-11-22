@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-22
+
 ### Added
 
 - `just sve-runtime`: QEMU execution at multiple vector lengths with
@@ -123,3 +125,4 @@ All notable changes to this project are documented here. The format follows
 [0.0.0]: https://github.com/nanithefkuc/simdispatch/commits/main
 [0.1.0]: https://github.com/nanithefkuc/simdispatch/compare/b7c921f...f78b369
 [0.2.0]: https://github.com/nanithefkuc/simdispatch/compare/f78b369...main
+[0.3.0]: https://github.com/nanithefkuc/simdispatch/releases/tag/v0.3.0
